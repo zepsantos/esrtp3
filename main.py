@@ -1,8 +1,5 @@
 import sys
 
-import bootstraper
-import client
-import server
 import threading
 import logging
 import ott

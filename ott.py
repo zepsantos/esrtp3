@@ -53,13 +53,11 @@ class Ott:
         return list(map(lambda node: node.get_addr(), self.nodes))
 
     def handle_node_event(self, key, mask, id):
-
         node = self.nodes[id]
         try:
             if mask & selectors.EVENT_READ:
-                message = key.recv(1024)
+                message = key.recv(1024) # se for maior da asneira
                 self.handleRead(node, message)
-
             if mask & selectors.EVENT_WRITE:
                 tosend = self.handleWrite(node)
                 if tosend:
@@ -93,7 +91,6 @@ class Ott:
         return tosend
 
     def serve_forever(self):
-
         while True:
             # Wait until some registered socket becomes ready. This will block
             # for 200 ms.

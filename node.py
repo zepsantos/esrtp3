@@ -8,17 +8,17 @@ class Node():
 
     def __init__(self, ott, addr, port, sock=None, id=None, callback=None):
         self.addr = addr
-        self.callback = callback
+       # self.callback = callback
         self.port = port
-
         self.ott = ott
-        if sock is None:
+        if sock is None: # Node que inicia pedido de conexao
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.node_connect()
             self.status = nodeprotocol.NodeStatus.ACKSENDING
         else:
-            self.status = nodeprotocol.NodeStatus.ACKRECEIVING
+            self.status = nodeprotocol.NodeStatus.ACKRECEIVING #Node que recebe pedido de conexao
             self.sock = sock
+        self.sock.setblocking(False) #TESTAR ISTO
         if id is None:
             self.id = common.generate_id(addr,port)
         else:
@@ -29,8 +29,6 @@ class Node():
 
     def get_socket(self):
         return self.sock
-
-
 
     def node_connect(self):
         try:
