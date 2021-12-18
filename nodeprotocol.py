@@ -13,6 +13,7 @@ from tracker import Tracker
 # status(CONNECTING) -> RECEIVING ACK -> SEND ACK -> status(CONNECTED) -> status(IDLE) -> status(DISCONNECTED) (BOOTSTRAP)
 # SEND ACK(com id) -> RECEIVE ACK ->recebe id e lista vizinhos -> status(CONNECTED) -> status(IDLE) -> status(DISCONNECTED) (NODE)
 # NODE connect to lista vizinhos (NODE)
+
 class NodeStatus(Enum):
     ACKSENDING = 1  # Sending ACK
     ACKRECEIVING = 2  # Receiving ACK
