@@ -4,6 +4,7 @@ import datetime
 from enum import Enum
 
 
+
 class MessageType(Enum):
     ACK = 0
     NACK = 1
@@ -17,19 +18,25 @@ class MessageType(Enum):
     SPEERS = 9
 
 
+
+
+
 def generate_timestamp():
     ct = datetime.datetime.now()
     ts = ct.timestamp()
     return ts
 
+
 def convert_timestamp(ts):
     ct = datetime.datetime.fromtimestamp(ts)
     return ct
 
+
 class Message:
-    def __init__(self , sender_id, timestamp=None):
+    def __init__(self, sender_id, timestamp=None, tracker=None):
         self.type = MessageType.MESSAGE
         self.sender_id = sender_id
+        self.tracker = tracker
         if timestamp is None:
             self.timestamp = generate_timestamp()
         # getter method
@@ -45,3 +52,6 @@ class Message:
 
     def get_type(self):
         return self.type
+
+    def get_tracker(self):
+        return self.tracker

@@ -4,8 +4,8 @@ from message import Message, MessageType
 
 
 class pingMessage(Message):
-    def __init__(self, message):
-        super().__init__()
+    def __init__(self, sender_id,tracker = None):
+        super().__init__(sender_id,tracker = tracker)
         self.message = "PING"
         self.type = MessageType.PING
 

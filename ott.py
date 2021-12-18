@@ -2,10 +2,13 @@ import logging
 import selectors
 import socket
 import pickle
+
+import testes
 from node import Node
 import nodeprotocol
 import json
 import common
+from time import sleep
 
 HOST = '0.0.0.0'
 PORT = 7000
@@ -29,12 +32,15 @@ class Ott:
         self.bootstrapper = False
         self.addr = self.main_socket.getsockname()[0]
         self.id = common.generate_id(HOST, PORT)
+        logging.info(f'Ott id: {self.id}')
         if bootstrapper_info == {}:
             self.bootstrapper = True
+            self.network_config = {}
+            self.load_network_config()
         else:
             self.connect_to_bootstrapper(bootstrapper_info)
-        self.network_config = {}
-        self.load_network_config()
+        self.neighbours = []
+        self.toDispatch = {}
 
     def accept_connection(self, key, mask, id):
         conn, addr = self.main_socket.accept()
@@ -43,7 +49,7 @@ class Ott:
 
     def add_node(self, node):
         self.nodes[node.get_id()] = node
-        data = {'handler': self.handle_node_event, 'id': node.get_id()}
+        data = {'handler': self.handle_node_event, 'id': node.get_id()}  # CUIDADO COM ISTO
         self.selector.register(node.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
 
     def remove_node(self, node):
@@ -70,11 +76,12 @@ class Ott:
     def handleRead(self, node, message):
         if message:
             message = pickle.loads(message)
+            logging.info(f'{node.get_addr()} : {message}')
             status = node.get_status()
             handler = nodeprotocol.get_handler(status, True)
             if handler is None: return
             info = {'node': node, 'message': message, 'id': self.id, 'ott': self}
-            logging.info(f'{node.get_addr()} : {message}')
+            logging.debug(f'Node status : {status}')
             handler(info)
 
     def get_ott_id(self):
@@ -93,11 +100,24 @@ class Ott:
         return tosend
 
     def serve_forever(self):
-
+        info = {'ott': self}
+        count = 0
         while True:
             # Wait until some registered socket becomes ready. This will block
             # for 200 ms.
-            events = self.selector.select(timeout=0.2)
+            if self.bootstrapper and count == 0:
+                msg = testes.pingTeste(info)
+                addr_to_id = self.get_addr_to_id()
+                channels = msg.get_tracker().get_channels()
+                path = list(map(lambda x: addr_to_id.get(x, None), channels))
+                msg.get_tracker().set_path(path)
+                nxt = msg.get_tracker().get_next_channel()
+                if nxt is not None:
+                        logging.debug('Dispatching ping to ' + str(nxt))
+                        self.add_toDispatch(nxt, msg)
+                        count += 1
+
+            events = self.selector.select(timeout=2)
 
             # For each new event, dispatch to its handler
             for key, mask in events:
@@ -109,10 +129,23 @@ class Ott:
         port = bootstrapper_info['port']
         self.connect_to_node(addr, port)
 
+    # Checks if we already have a connection with the node by his address
+    def check_node_address(self, node_addr):
+        for node in self.nodes.values():
+            if node.get_addr() == node_addr:
+                return True, node
+        return False, None
+
     def connect_to_node(self, addr, port):
-        print(f'{addr} : {port}')
-        node = Node(self, addr, port)
-        self.add_node(node)
+        inNetwork, node = self.check_node_address(addr)
+        if not inNetwork:
+            node = Node(self, addr, port)
+            self.add_node(node)
+        else:  ## TODO: check if node is connected if not reconnect (open the discriptor and read(provavelmente))
+            logging.debug(f'Selectors list {self.selector.get_map().values()}')
+            node.reconnect()
+            logging.debug(f'Selectors list {self.selector.get_map().values()} after reconnect')
+            return
 
     def load_network_config(self):
         with open('networkconfigotim.json', 'r') as f:
@@ -127,3 +160,38 @@ class Ott:
 
     def get_selector(self):
         return self.selector
+
+    def is_bootstrapper(self):
+        return self.bootstrapper
+
+    def add_neighbour(self, neighbour):
+        self.neighbours.append(neighbour)
+        for node in neighbour:
+            self.connect_to_node(node, 7000)
+
+    def node_changed_id(self, id, newid):
+        node = self.nodes.pop(id)
+        toDispatch = self.toDispatch.pop(id, None)
+        if toDispatch is not None:
+            self.toDispatch[newid] = toDispatch
+        self.nodes[newid] = node
+        data = {'handler': self.handle_node_event, 'id': node.get_id()}
+        self.selector.unregister(node.get_socket())
+        self.selector.register(node.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
+
+    def add_toDispatch(self, id, message):
+        dispatcher = self.toDispatch.get(id, [])
+        dispatcher.append(message)
+        self.toDispatch[id] = dispatcher
+
+    def get_toDispatch(self, id):
+        tmp = self.toDispatch.get(id, [])
+        if len(tmp) > 0:
+            return tmp.pop(0)
+        return None
+
+    def get_addr_to_id(self):
+        addrToId = {}
+        for node in self.nodes.values():
+            addrToId[node.get_addr()] = node.get_id()
+        return addrToId

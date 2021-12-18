@@ -1,7 +1,7 @@
+import logging
 import socket
 import nodeprotocol
 import common
-
 
 
 class Node():
@@ -14,15 +14,15 @@ class Node():
         self.ott = ott
         if sock is None:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.node_connect()
-            self.status = nodeprotocol.NodeStatus.ACKSENDING
+            self.connect()
         else:
             self.status = nodeprotocol.NodeStatus.ACKRECEIVING
             self.sock = sock
         if id is None:
-            self.id = common.generate_id(addr,port)
+            self.id = common.generate_id(addr, port)
         else:
             self.id = id
+        self.sock.setblocking(False)
 
     def get_addr(self):
         return self.addr
@@ -30,21 +30,21 @@ class Node():
     def get_socket(self):
         return self.sock
 
-
-
-    def node_connect(self):
+    def connect(self):
         try:
+            logging.debug("Connecting to node: " + str(self.addr) + ":" + str(self.port))
             self.sock.connect((self.addr, self.port))
+            self.set_status(nodeprotocol.NodeStatus.ACKSENDING)
         except socket.error:
+            logging.debug("Could not connect to node %s:%d" % (self.addr, self.port))
             self.set_status(nodeprotocol.NodeStatus.OFFLINE)
 
-    def node_disconnect(self):
+    def disconnect(self):
         self.sock.close()
 
-    def node_reconnect(self):
-        connbool = self.node_connect()
-
-
+    def reconnect(self):
+        if self.get_status() == nodeprotocol.NodeStatus.OFFLINE:
+            self.connect()
 
     def get_id(self):
         return self.id
@@ -55,7 +55,10 @@ class Node():
     def set_status(self, status):
         self.status = status
 
-    def set_id(self, id):
-        self.id = id
+    def set_id(self, newid):
+        tmp = self.id
+        self.id = newid
+        self.ott.node_changed_id(tmp,newid)
+
 
 

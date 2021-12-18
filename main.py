@@ -1,9 +1,5 @@
 import sys
 
-import bootstraper
-import client
-import server
-import threading
 import logging
 import ott
 
@@ -15,7 +11,7 @@ def init():
         logging.info("INITIATING BOOTSTRAPER")
     # bootstrapper.start(o)
     else:
-        print(sys.argv[1])
+        #print(sys.argv[1])
         hostip = sys.argv[1]
         bootstrapper_info = {'addr': hostip, 'port': 7000}
     #  client_thread = threading.Thread(target=client.start_client, args=(bootstraper_info,))
