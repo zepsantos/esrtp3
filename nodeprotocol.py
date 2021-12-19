@@ -46,7 +46,6 @@ def handle_SPeers(info):
     else:
         speersmessage = SPeersMessage(ott.get_ott_id(), [], [])
     node.set_status(NodeStatus.CONNECTED)
-    logging.debug(f' Node {node.get_addr()} is answering SPeers')
     tmp = pickle.dumps(speersmessage)
     return tmp
 
@@ -73,7 +72,7 @@ def handle_connectedR(info):
     node = info['node']
     ott = info['ott']
     message = info['message']
-    if not message.get_tracker().is_last_channel():
+    if not message.get_tracker().reach_destination():
         ott.add_toDispatch(message.get_tracker().get_next_channel(), message)
     else:
         if message.get_type() == MessageType.DATA:
@@ -83,7 +82,9 @@ def handle_connectedR(info):
                 logging.info("Received ping")
             else:
                 logging.info("Received ping from bootstrap")
-                message.get_tracker().extend_channels(message.get_tracker().get_path().reverse())
+                path = message.get_tracker().get_path().reverse()
+                logging.debug(f'Path: {path}')
+                message.get_tracker().extend_channels(path)
                 ott.add_toDispatch(message.get_tracker().get_next_channel(), message)
 
 

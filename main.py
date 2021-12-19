@@ -1,8 +1,9 @@
+import socket
 import sys
 
 import logging
 import ott
-
+from netifaces import interfaces, ifaddresses, AF_INET
 
 def init():
     logging.basicConfig(level=logging.NOTSET)
@@ -17,6 +18,10 @@ def init():
     #  client_thread = threading.Thread(target=client.start_client, args=(bootstraper_info,))
     #  client_thread.start()
     #  client_thread.join()
+
+    for ifaceName in interfaces():
+        addresses = [i['addr'] for i in ifaddresses(ifaceName).setdefault(AF_INET, [{'addr': 'No IP addr'}])]
+        print(' '.join(addresses))
     ott_manager = ott.Ott(bootstrapper_info)
     ott_manager.serve_forever()
 

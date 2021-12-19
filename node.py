@@ -52,13 +52,20 @@ class Node():
     def get_status(self):
         return self.status
 
+    def get_port(self):
+        return self.port
+
     def set_status(self, status):
         self.status = status
+        logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
 
     def set_id(self, newid):
         tmp = self.id
         self.id = newid
-        self.ott.node_changed_id(tmp,newid)
+        self.ott.node_changed_id(tmp, newid)
 
-
-
+    def received_connection(self, connnode):
+        self.addr = connnode.get_addr()
+        self.port = connnode.get_port()
+        self.sock = connnode.get_socket()
+        self.set_status(nodeprotocol.NodeStatus.ACKRECEIVING)

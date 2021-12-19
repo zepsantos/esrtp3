@@ -47,10 +47,15 @@ class Ott:
         logging.info(f'Accepted connection from {addr}')
         self.add_node(Node(self, addr[0], addr[1], conn))
 
-    def add_node(self, node):
-        self.nodes[node.get_id()] = node
-        data = {'handler': self.handle_node_event, 'id': node.get_id()}  # CUIDADO COM ISTO
-        self.selector.register(node.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
+    def add_node(self, conn):
+        status, ournode = self.check_node_address(conn.get_addr())
+        if status:
+            ournode.received_connection(conn)
+        else:
+            ournode = conn
+            self.nodes[conn.get_id()] = conn
+        data = {'handler': self.handle_node_event, 'id': ournode.get_id()}  # CUIDADO COM ISTO
+        self.selector.register(ournode.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
 
     def remove_node(self, node):
         self.nodes.pop(node)
@@ -59,14 +64,15 @@ class Ott:
         return list(map(lambda node: node.get_addr(), self.nodes))
 
     def handle_node_event(self, key, mask, id):
-
-        node = self.nodes[id]
+        node = self.nodes.get(id, None)  ## Pode tar aqui um bug no selector
+        if node is None: return
         try:
             if mask & selectors.EVENT_READ:
                 message = key.recv(1024)
                 self.handleRead(node, message)
 
             if mask & selectors.EVENT_WRITE:
+                #print(f' sending to {node.get_id()} dispatcher: {self.get_toDispatch(node.get_id())}')
                 tosend = self.handleWrite(node)
                 if tosend:
                     key.send(tosend)
@@ -102,17 +108,24 @@ class Ott:
     def serve_forever(self):
         info = {'ott': self}
         count = 0
+        teste = 0
         while True:
             # Wait until some registered socket becomes ready. This will block
             # for 200 ms.
+            # teste += 7
+            # if teste%10 == 0:
+            #     testelista = list(map(lambda node: (node.get_addr(),node.get_status()), self.nodes.values()))
+            #    print(f'node status {testelista}')
             if self.bootstrapper and count == 0:
                 msg = testes.pingTeste(info)
                 addr_to_id = self.get_addr_to_id()
                 channels = msg.get_tracker().get_channels()
                 path = list(map(lambda x: addr_to_id.get(x, None), channels))
-                msg.get_tracker().set_path(path)
-                nxt = msg.get_tracker().get_next_channel()
-                if nxt is not None:
+                if None not in path:
+                    if testes.checkPathNodeConnected(path, self.nodes):
+                        print(f'path {path}')
+                        msg.get_tracker().set_path(path)
+                        nxt = msg.get_tracker().get_next_channel()
                         logging.debug('Dispatching ping to ' + str(nxt))
                         self.add_toDispatch(nxt, msg)
                         count += 1
@@ -137,6 +150,7 @@ class Ott:
         return False, None
 
     def connect_to_node(self, addr, port):
+        logging.debug(f'Connecting to {addr}:{port}')
         inNetwork, node = self.check_node_address(addr)
         if not inNetwork:
             node = Node(self, addr, port)
@@ -175,11 +189,13 @@ class Ott:
         if toDispatch is not None:
             self.toDispatch[newid] = toDispatch
         self.nodes[newid] = node
+        logging.debug(f'node changed id {id} to {newid}')
         data = {'handler': self.handle_node_event, 'id': node.get_id()}
         self.selector.unregister(node.get_socket())
         self.selector.register(node.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
 
     def add_toDispatch(self, id, message):
+        logging.debug(f'add toDispatch {id} , {message}')
         dispatcher = self.toDispatch.get(id, [])
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher

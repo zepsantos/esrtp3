@@ -26,7 +26,7 @@ class Tracker:
         self.channels.extend(channels)
 
     def get_path(self):
-        return self.channels[:self.channels_jump_count]
+        return self.channels
 
 
     def set_path(self, path):
