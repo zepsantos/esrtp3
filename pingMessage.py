@@ -1,6 +1,6 @@
 import datetime
 
-from message import Message, MessageType
+from message import Message, MessageType, convert_timestamp
 
 
 class pingMessage(Message):
@@ -11,5 +11,5 @@ class pingMessage(Message):
 
     def ping(self):
         currentTime = datetime.datetime.now()
-        ping = currentTime - Message.convert_timestamp(self.get_timestamp())
+        ping = currentTime - convert_timestamp(self.get_timestamp())
         return ping.total_seconds()

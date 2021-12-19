@@ -15,7 +15,6 @@ def pingTeste(info):
 
 def checkPathNodeConnected(path, nodedic):
     for p in path:
-        print(f'node in path: {p}')
         tmp = nodedic.get(p, None)
         if tmp is None:
             return False

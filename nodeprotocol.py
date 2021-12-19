@@ -21,6 +21,8 @@ class NodeStatus(Enum):
     WPEERS = 4  # waiting Peers
     CONNECTED = 5  # Connected
     OFFLINE = 6  # Offline
+    FACK = 7  # Final ACK
+    WACK = 8  # Waiting final ACK
 
 
 ## VERIFICAR SE AINDA NAO EXISTE LIGACAO QUANDO O NODE ESTA A LIGAR SE AOS PEERS
@@ -29,7 +31,7 @@ def handle_RPeers(info):
     node = info['node']
     ott = info['ott']
     if message.get_type() != MessageType.SPEERS: return
-    node.set_status(NodeStatus.CONNECTED)
+    node.set_status(NodeStatus.FACK)
     node.set_id(message.get_sender_id())
     ott.add_neighbour(message.get_neighbours())
     ott.add_clients(message.get_clients())
@@ -45,7 +47,7 @@ def handle_SPeers(info):
         speersmessage = SPeersMessage(ott.get_ott_id(), neighbors, clients)
     else:
         speersmessage = SPeersMessage(ott.get_ott_id(), [], [])
-    node.set_status(NodeStatus.CONNECTED)
+    node.set_status(NodeStatus.WACK)
     tmp = pickle.dumps(speersmessage)
     return tmp
 
@@ -60,8 +62,9 @@ def handle_AckReceive(info):
 
 
 def handle_AckSend(info):
-    id = info['id']
+    ott = info['ott']
     node = info['node']
+    id = ott.get_ott_id()
     message = ACKMessage(id)
     pickled = pickle.dumps(message)
     node.set_status(NodeStatus.WPEERS)
@@ -72,20 +75,26 @@ def handle_connectedR(info):
     node = info['node']
     ott = info['ott']
     message = info['message']
-    if not message.get_tracker().reach_destination():
-        ott.add_toDispatch(message.get_tracker().get_next_channel(), message)
+    tracker = message.get_tracker()
+    reached_destination = tracker.reach_destination(ott.get_ott_id())
+
+    logging.debug(f' reach_destination: {reached_destination}')
+    if not reached_destination:
+        nextdestination_id = tracker.get_next_channel()
+        ott.add_toDispatch(nextdestination_id, message)
     else:
         if message.get_type() == MessageType.DATA:
             pass
         elif message.get_type() == MessageType.PING:
             if (ott.bootstrapper):
-                logging.info("Received ping")
+                delay = message.ping()
+                logging.info(f'Received ping with delay: {delay}')
             else:
                 logging.info("Received ping from bootstrap")
-                path = message.get_tracker().get_path().reverse()
-                logging.debug(f'Path: {path}')
-                message.get_tracker().extend_channels(path)
-                ott.add_toDispatch(message.get_tracker().get_next_channel(), message)
+                tracker.send_back(message.get_sender_id())
+                logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
+                nextdestination_id = tracker.get_next_channel()
+                ott.add_toDispatch(nextdestination_id, message)
 
 
 def handle_connectedW(info):
@@ -98,16 +107,35 @@ def handle_connectedW(info):
     else:
         return None
 
+def handle_AckConfirmation(info):
+    node = info['node']
+    ott = info['ott']
+    message = info['message']
+    if message.get_type() != MessageType.ACK: return
+    if message.get_sender_id() == node.get_id():
+        node.set_status(NodeStatus.CONNECTED)
+
+
+def handle_AckConfirmationSend(info):
+    node = info['node']
+    ott = info['ott']
+    id = ott.get_ott_id()
+    message = ACKMessage(id)
+    pickled = pickle.dumps(message)
+    node.set_status(NodeStatus.CONNECTED)
+    return pickled
 
 def get_handler(status, read):
     if read:
         dic = {
+            NodeStatus.WACK: handle_AckConfirmation,
             NodeStatus.ACKRECEIVING: handle_AckReceive,
             NodeStatus.WPEERS: handle_RPeers,
             NodeStatus.CONNECTED: handle_connectedR
         }
     else:
         dic = {
+            NodeStatus.FACK: handle_AckConfirmationSend,
             NodeStatus.ACKSENDING: handle_AckSend,
             NodeStatus.SPEERS: handle_SPeers,
             NodeStatus.CONNECTED: handle_connectedW
