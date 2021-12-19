@@ -5,7 +5,12 @@ def read_json(jsonfile,graph):
     f= open(jsonfile, 'r')
     network_config = json.load(f)
     for i in network_config:
-        graph[i] = network_config[i]['neighbors']
+        for nodelist in network_config[i].values():
+            for node in nodelist:
+                if i in graph:
+                    graph[i].append(node)
+                else:
+                    graph[i] = [node]
 
 
 def BFS_SP(graph, start, goal):
@@ -42,7 +47,7 @@ def BFS_SP(graph, start, goal):
                 # Condition to check if the
                 # neighbour node is the goal
                 if neighbour == goal:
-                    #print("Shortest path = ", *new_path)
+                    print("Shortest path = ", *new_path)
                     return new_path
             explored.append(node)
  
@@ -55,7 +60,7 @@ def BFS_SP(graph, start, goal):
 def shortest_path(src,dest):
     graph={}
     read_json('networkconfigotim.json', graph)
-
+    
     list = BFS_SP(graph, src, dest)
     
     return list
