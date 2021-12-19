@@ -78,7 +78,7 @@ def handle_connectedR(info):
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
 
-    logging.debug(f' reach_destination: {reached_destination}')
+    #logging.debug(f' reach_destination: {reached_destination}')
     if not reached_destination:
         nextdestination_id = tracker.get_next_channel()
         ott.add_toDispatch(nextdestination_id, message)
@@ -90,9 +90,9 @@ def handle_connectedR(info):
                 delay = message.ping()
                 logging.info(f'Received ping with delay: {delay}')
             else:
-                logging.info("Received ping from bootstrap")
+                logging.info("Received ping from bootstrap with delay: " + str(message.ping()))
                 tracker.send_back(message.get_sender_id())
-                logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
+                #logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
 

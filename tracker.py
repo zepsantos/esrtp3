@@ -46,7 +46,7 @@ class Tracker:
 
 
     def send_back(self,sender_id):
-        path = self.get_path()
+        path = list(self.get_path())
         path.reverse()
         path.pop(0)
         path.append(sender_id)

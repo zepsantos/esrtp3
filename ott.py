@@ -65,7 +65,7 @@ class Ott:
 
     def handle_node_event(self, key, mask, node):
         if node is None:
-            logging.debug('Node is none in handle_node_Event')
+            logging.error('Node is none in handle_node_Event')
             return
         try:
             if mask & selectors.EVENT_READ:
@@ -76,7 +76,7 @@ class Ott:
                 #print(f' sending to {node.get_id()} dispatcher: {self.get_toDispatch(node.get_id())}')
                 tosend = self.handleWrite(node)
                 if tosend:
-                    logging.debug(f'Sending to {node.get_id()} : {tosend}')
+                   # logging.debug(f'Sending to {node.get_id()} : {tosend}')
                     key.send(tosend)
         except Exception as e:
             return
@@ -89,7 +89,6 @@ class Ott:
             handler = nodeprotocol.get_handler(status, True)
             if handler is None: return
             info = {'node': node, 'message': message, 'ott': self}
-            logging.debug(f'Node status : {status} , message: {message}')
             handler(info)
 
     def get_ott_id(self):
@@ -127,7 +126,7 @@ class Ott:
                     if testes.checkPathNodeConnected(path, self.nodes):
                         msg.get_tracker().set_path(path)
                         nxt = msg.get_tracker().get_next_channel()
-                        logging.debug('Dispatching ping to ' + str(nxt))
+                        #logging.debug('Dispatching ping to ' + str(nxt))
                         self.add_toDispatch(nxt, msg)
                         count += 1
 
@@ -196,7 +195,7 @@ class Ott:
         tmp = list(map( lambda a : a.get_status() , self.nodes.values()))
 
     def add_toDispatch(self, id, message):
-        logging.debug(f'add toDispatch {id} , {message}')
+        #logging.debug(f'add toDispatch {id} , {message}')
         dispatcher = self.toDispatch.get(id, [])
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
@@ -212,3 +211,8 @@ class Ott:
         for node in self.nodes.values():
             addrToId[node.get_addr()] = node.get_id()
         return addrToId
+
+    # Adiciona uma stream a transmitir pelo nosso path
+    def add_stream(self, stream,id):
+        pass
+
