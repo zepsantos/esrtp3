@@ -11,17 +11,19 @@ CACHE_FILE_EXT = ".jpg"
 class ClienteGUI:
 	
 	# Initiation..
-	def __init__(self, master, addr, port):
+	def __init__(self, master, ott):
 		self.master = master
 		self.master.protocol("WM_DELETE_WINDOW", self.handler)
 		self.createWidgets()
-		self.addr = addr
-		self.port = int(port)
+		self.ott = ott
+		#self.addr = addr
+		#self.port = int(port)
 		self.rtspSeq = 0
 		self.sessionId = 0
 		self.requestSent = -1
 		self.teardownAcked = 0
-		self.openRtpPort()
+		self.ott.setDataCallback(self.dataCallback)
+		#self.openRtpPort()
 		self.playMovie()
 		self.frameNbr = 0
 		
@@ -75,8 +77,8 @@ class ClienteGUI:
 		self.playEvent = threading.Event()
 		self.playEvent.clear()
 	
-	def listenRtp(self):		
-		"""Listen for RTP packets."""
+	"""def listenRtp(self):		
+		Listen for RTP packets.
 		while True:
 			try:
 				data = self.rtpSocket.recv(20480)
@@ -97,8 +99,20 @@ class ClienteGUI:
 				
 				self.rtpSocket.shutdown(socket.SHUT_RDWR)
 				self.rtpSocket.close()
-				break
-				
+				break """
+
+	def dataCallback(self,data):
+		"""Receive data from server."""
+		if data:
+			rtpPacket = RtpPacket()
+			rtpPacket.decode(data)
+
+			currFrameNbr = rtpPacket.seqNum()
+			print("Current Seq Num: " + str(currFrameNbr))
+
+			if currFrameNbr > self.frameNbr:  # Discard the late packet
+				self.frameNbr = currFrameNbr
+				self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
 	
 	def writeFrame(self, data):
 		"""Write the received frame to a temp image file. Return the image file."""
@@ -115,9 +129,9 @@ class ClienteGUI:
 		self.label.configure(image = photo, height=288) 
 		self.label.image = photo
 		
-	
+"""	
 	def openRtpPort(self):
-		"""Open RTP socket binded to a specified port."""
+		Open RTP socket binded to a specified port.
 		# Create a new datagram socket to receive RTP packets from the server
 		self.rtpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		
@@ -130,7 +144,7 @@ class ClienteGUI:
 			print('\nBind \n')
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
-
+"""
 	def handler(self):
 		"""Handler on explicitly closing the GUI window."""
 		self.pauseMovie()

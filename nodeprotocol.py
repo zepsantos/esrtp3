@@ -95,6 +95,8 @@ def handle_connectedR(info):
                 #logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
+        elif message.get_type() == MessageType.DATA:
+            ott.callbackData(message.get_data())
 
 
 def handle_connectedW(info):

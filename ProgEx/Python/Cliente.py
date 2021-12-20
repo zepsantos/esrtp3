@@ -1,6 +1,5 @@
-import sys
 from tkinter import Tk
-from ClienteGUI import ClienteGUI
+from ProgEx.Python.ClienteGUI import ClienteGUI
 
 if __name__ == "__main__":
 	try:

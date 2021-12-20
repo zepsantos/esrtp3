@@ -16,6 +16,7 @@ class MessageType(Enum):
     MESSAGE = 7
     PING = 8
     SPEERS = 9
+    RSTREAM = 10
 
 
 

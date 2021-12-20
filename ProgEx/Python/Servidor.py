@@ -1,6 +1,3 @@
-import sys, socket
-
-from random import randint
 import sys, traceback, threading, socket
 
 from VideoStream import VideoStream

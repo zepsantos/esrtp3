@@ -2,6 +2,7 @@ import logging
 import selectors
 import socket
 import pickle
+import sys
 
 import testes
 from node import Node
@@ -9,6 +10,8 @@ import nodeprotocol
 import json
 import common
 from time import sleep
+
+from requestStream import RequestStreamMessage
 
 HOST = '0.0.0.0'
 PORT = 7000
@@ -69,14 +72,14 @@ class Ott:
             return
         try:
             if mask & selectors.EVENT_READ:
-                message = key.recv(1024)
+                message = key.recv(23000)
                 self.handleRead(node, message)
 
             if mask & selectors.EVENT_WRITE:
-                #print(f' sending to {node.get_id()} dispatcher: {self.get_toDispatch(node.get_id())}')
+                # print(f' sending to {node.get_id()} dispatcher: {self.get_toDispatch(node.get_id())}')
                 tosend = self.handleWrite(node)
                 if tosend:
-                   # logging.debug(f'Sending to {node.get_id()} : {tosend}')
+                    # logging.debug(f'Sending to {node.get_id()} : {tosend}')
                     key.send(tosend)
         except Exception as e:
             return
@@ -126,7 +129,7 @@ class Ott:
                     if testes.checkPathNodeConnected(path, self.nodes):
                         msg.get_tracker().set_path(path)
                         nxt = msg.get_tracker().get_next_channel()
-                        #logging.debug('Dispatching ping to ' + str(nxt))
+                        # logging.debug('Dispatching ping to ' + str(nxt))
                         self.add_toDispatch(nxt, msg)
                         count += 1
 
@@ -192,10 +195,10 @@ class Ott:
         self.nodes[newid] = node
         data = {'handler': self.handle_node_event, 'node': node}
         self.selector.modify(node.get_socket(), selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
-        tmp = list(map( lambda a : a.get_status() , self.nodes.values()))
+        tmp = list(map(lambda a: a.get_status(), self.nodes.values()))
 
     def add_toDispatch(self, id, message):
-        #logging.debug(f'add toDispatch {id} , {message}')
+        # logging.debug(f'add toDispatch {id} , {message}')
         dispatcher = self.toDispatch.get(id, [])
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
@@ -213,6 +216,27 @@ class Ott:
         return addrToId
 
     # Adiciona uma stream a transmitir pelo nosso path
-    def add_stream(self, stream,id):
+    def add_stream(self, stream, id):
         pass
 
+    def setDataCallback(self, callback):
+        self.dataCallback = callback
+
+    def request_stream(self):
+        serverid = self.get_addr_to_id().get(self.bootstrapper_info['addr'],None)
+        myid = self.get_ott_id()
+        if serverid is not None:
+            requestmessage = RequestStreamMessage(myid)
+            self.add_toDispatch(serverid, requestmessage)
+
+def initOtt():
+    logging.basicConfig(level=logging.NOTSET,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
+    hostip = sys.argv[1]
+    bootstrapper_info = {'addr': hostip, 'port': 7000}
+    ott_manager = Ott(bootstrapper_info)
+    ott_manager.serve_forever()
+
+
+if __name__ == '__main__':
+    initOtt()
