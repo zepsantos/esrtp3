@@ -162,20 +162,26 @@ def multicast_path2(pathlist):
     while elems.count(elems[0]) == len(elems):
         path.append(elems[0])
         pathlist = [[j for j in nested if j != elems[0]] for nested in pathlist]
-        elems = Extract(pathlist,index)
+        if pathlist[0]:
+            elems = Extract(pathlist,index)
+        else:
+            break
+    
     sub = []
-    for p in pathlist:
-        elem = p[index]
-        if any(elem in i for i in pathlist):
-            lst = subLists(pathlist,elem)
-            lst = remMerge(lst,elem)
-            lst.insert(0,elem)
-            sub.append(lst)
-    res = []
-    for i in sub:
-        if i not in res:
-            res.append(i)
-    path.append(res)
+    if pathlist[0]:
+        for p in pathlist:
+            elem = p[index]
+            if any(elem in i for i in pathlist):
+                lst = subLists(pathlist,elem)
+                lst = remMerge(lst,elem)
+                lst.insert(0,elem)
+                sub.append(lst)
+        res = []
+        for i in sub:
+            if i not in res:
+                res.append(i)
+        path.append(res)
+    print(path)
     return path
     #print(path)
     
