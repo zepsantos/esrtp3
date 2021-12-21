@@ -83,7 +83,9 @@ def handle_connectedR(info):
         ott.add_toDispatch(nextdestination_id, message)
     else:
         if message.get_type() == MessageType.DATA:
-            pass
+            logging.debug('calling callback')
+            logging.debug(ott.dataCallback)
+            ott.dataCallback(message.get_rtppacket())
         elif message.get_type() == MessageType.PING:
             if (ott.bootstrapper):
                 delay = message.ping()
@@ -94,8 +96,7 @@ def handle_connectedR(info):
                 #logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
-        elif message.get_type() == MessageType.DATA:
-            ott.callbackData(message.get_data())
+
 
 
 def handle_connectedW(info):

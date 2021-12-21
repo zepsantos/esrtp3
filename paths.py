@@ -185,5 +185,5 @@ def multicast_path2(pathlist):
     return path
     #print(path)
     
-pathlist=multicast_path_list("10.0.0.10",["10.0.4.20","10.0.3.20"])
-multicast_path2(pathlist)
+#pathlist=multicast_path_list("10.0.0.10",["10.0.4.20","10.0.3.20"])
+#multicast_path2(pathlist)

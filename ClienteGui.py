@@ -1,3 +1,4 @@
+import logging
 from tkinter import *
 import tkinter.messagebox
 from PIL import Image, ImageTk
@@ -76,8 +77,10 @@ class ClienteGUI:
 
     def listenOtt(self,data):
         """Listen for RTP packets."""
+        logging.debug("RECEIVED STREAM DATA")
         if not data:
             return
+
         rtpPacket = RtpPacket()
         rtpPacket.decode(data)
 
