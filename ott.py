@@ -5,6 +5,7 @@ import pickle
 import sys
 
 import testes
+from dataMessage import DataMessage
 from node import Node
 import nodeprotocol
 import json
@@ -203,6 +204,14 @@ class Ott:
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
 
+    def add_toDispatchByAddr(self, addr, message):
+        id = self.get_addr_to_id().get(addr, None)
+        if id is not None:
+            self.add_toDispatch(id, message)
+        else:
+            logging.debug('Node not found') ## Envia para todos?
+
+
     def get_toDispatch(self, id):
         tmp = self.toDispatch.get(id, [])
         if len(tmp) > 0:
@@ -216,18 +225,22 @@ class Ott:
         return addrToId
 
     # Adiciona uma stream a transmitir pelo nosso path
-    def add_stream(self, stream, id):
-        pass
+    def add_stream(self, packet, addr , path):
+        id = self.get_addr_to_id().get(addr, None)
+        if id is not None:
+
+            datapacket = DataMessage(id,path,packet)
+            self.add_toDispatch(id, datapacket)
 
     def setDataCallback(self, callback):
         self.dataCallback = callback
 
-    def request_stream(self):
+    """ def request_stream(self):
         serverid = self.get_addr_to_id().get(self.bootstrapper_info['addr'],None)
         myid = self.get_ott_id()
         if serverid is not None:
             requestmessage = RequestStreamMessage(myid)
-            self.add_toDispatch(serverid, requestmessage)
+            self.add_toDispatch(serverid, requestmessage) """
 
 def initOtt():
     logging.basicConfig(level=logging.NOTSET,

@@ -12,17 +12,16 @@ CACHE_FILE_EXT = ".jpg"
 class ClienteGUI:
 
     # Initiation..
-    def __init__(self, master, addr, port):
+    def __init__(self, master, ott_manager):
         self.master = master
         self.master.protocol("WM_DELETE_WINDOW", self.handler)
         self.createWidgets()
-        self.addr = addr
-        self.port = int(port)
         self.rtspSeq = 0
         self.sessionId = 0
         self.requestSent = -1
         self.teardownAcked = 0
-        self.openRtpPort()
+        self.ott = ott_manager
+        self.ott.setDataCallback(self.listenOtt)
         self.playMovie()
         self.frameNbr = 0
 
@@ -72,33 +71,23 @@ class ClienteGUI:
     def playMovie(self):
         """Play button handler."""
         # Create a new thread to listen for RTP packets
-        threading.Thread(target=self.listenRtp).start()
         self.playEvent = threading.Event()
         self.playEvent.clear()
 
-    def listenRtp(self):
+    def listenOtt(self,data):
         """Listen for RTP packets."""
-        while True:
-            try:
-                data = self.rtpSocket.recv(20480)
-                if data:
-                    rtpPacket = RtpPacket()
-                    rtpPacket.decode(data)
+        if not data:
+            return
+        rtpPacket = RtpPacket()
+        rtpPacket.decode(data)
 
-                    currFrameNbr = rtpPacket.seqNum()
-                    print("Current Seq Num: " + str(currFrameNbr))
+        currFrameNbr = rtpPacket.seqNum()
+        print("Current Seq Num: " + str(currFrameNbr))
 
-                    if currFrameNbr > self.frameNbr:  # Discard the late packet
-                        self.frameNbr = currFrameNbr
-                        self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
-            except:
-                # Stop listening upon requesting PAUSE or TEARDOWN
-                if self.playEvent.isSet():
-                    break
+        if currFrameNbr > self.frameNbr:  # Discard the late packet
+            self.frameNbr = currFrameNbr
+            self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
 
-                self.rtpSocket.shutdown(socket.SHUT_RDWR)
-                self.rtpSocket.close()
-                break
 
     def writeFrame(self, data):
         """Write the received frame to a temp image file. Return the image file."""
@@ -115,20 +104,6 @@ class ClienteGUI:
         self.label.configure(image=photo, height=288)
         self.label.image = photo
 
-    def openRtpPort(self):
-        """Open RTP socket binded to a specified port."""
-        # Create a new datagram socket to receive RTP packets from the server
-        self.rtpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        # Set the timeout value of the socket to 0.5sec
-        self.rtpSocket.settimeout(0.5)
-
-        try:
-            # Bind the socket to the address using the RTP port
-            self.rtpSocket.bind((self.addr, self.port))
-            print('\nBind \n')
-        except:
-            tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' % self.rtpPort)
 
     def handler(self):
         """Handler on explicitly closing the GUI window."""

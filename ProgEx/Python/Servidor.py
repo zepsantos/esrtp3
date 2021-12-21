@@ -59,7 +59,7 @@ class Servidor:
 			print("Using provided video file ->  " + filename)
 		except:
 			print("[Usage: Servidor.py <videofile>]\n")
-			filename = "movie.Mjpeg"
+			filename = "../../movie.Mjpeg"
 			print("Using default video file ->  " + filename)
 
 		# videoStram

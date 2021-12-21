@@ -1,38 +1,44 @@
 import logging
+import socket
 import sys
 import threading
 
 from tkinter import Tk
-from ClienteGUI import ClienteGUI
+#from ClienteGui import ClienteGUI
 from ott import Ott
 
+bootstrapper_info = {'addr': sys.argv[1], 'port': 7000}
 
-def initClient():
+def initOtt():
     """
     Initializes the client.
     """
 
-    try:
-        addr = sys.argv[1]
-        port = 7000
-    except:
-        print("[Usage: Cliente.py serveraddr]\n")
-    logging.basicConfig(level=logging.NOTSET,
-                        format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
-
-    bootstrapper_info = {'addr': addr, 'port': port}
+    global ott_manager
     ott_manager = Ott(bootstrapper_info)
-    # Create a new client
-    root = Tk()
-    app = ClienteGUI(root, ott_manager)
-    threading.Thread(target= ott_manager.serve_forever()).start()
-    app.master.title("Cliente")
-    root.mainloop()
-
+    threading.Thread(target=ott_manager.serve_forever()).start()
     return
 
+def initClient():
+    askForStream()
+    # Create a new client
+   # root = Tk()
+    #app = ClienteGUI(root, ott_manager)
+   # app.master.title("Cliente")
+   # root.mainloop()
+
+
+def askForStream():
+    clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    clientsocket.connect((bootstrapper_info['addr'], 20000))
+    clientsocket.send("movie.Mjpeg".encode())
+    clientsocket.close()
+
 if __name__ == '__main__':
-    initClient()
+    logging.basicConfig(level=logging.NOTSET,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
+    initOtt()
+    #initClient()
 
 
 
