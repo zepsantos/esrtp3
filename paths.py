@@ -48,7 +48,7 @@ def BFS_SP(graph, start, goal):
                 # Condition to check if the
                 # neighbour node is the goal
                 if neighbour == goal:
-                    print("Shortest path = ", *new_path)
+                    #print("Shortest path = ", *new_path)
                     return new_path
             explored.append(node)
         
@@ -121,9 +121,63 @@ def addNodes(graph, nodes):
 #graph = initGraph()
 #print(graph)
 #print("------------------------------------------------------------------------")
-#shortest_path("10.0.0.10","10.0.0.1", graph)
+#shortest_path("10.0.0.10","10.0.3.20", graph)
 #removeNodes(graph,['10.0.3.20', '10.0.2.2', '10.0.4.20'])
 #print(graph)
 #print("------------------------------------------------------------------------")
 #addNodes(graph,['10.0.2.2','10.0.4.20'])
 #print(graph)
+
+
+def multicast_path_list(src,dests):
+    graph = initGraph()
+    pathlist =[]
+    for dest in dests:
+        p = shortest_path(src,dest, graph)
+        pathlist.append(p)
+    pathlist=sorted(pathlist, key=len)
+    return pathlist
+
+
+def Extract(lst,index):
+    return [item[index] for item in lst]
+
+def subLists(lst, x):
+    lists = []
+    for i in lst:
+        if x in i:
+            lists.append(i)
+
+    return lists
+
+def remMerge(lst,elem):
+    lst = [[i for i in nested if i != elem] for nested in lst]
+    lst = [j for i in lst for j in i]
+    return lst
+
+def multicast_path2(pathlist):
+    path = []
+    index=0
+    elems= Extract(pathlist,index)
+    while elems.count(elems[0]) == len(elems):
+        path.append(elems[0])
+        pathlist = [[j for j in nested if j != elems[0]] for nested in pathlist]
+        elems = Extract(pathlist,index)
+    sub = []
+    for p in pathlist:
+        elem = p[index]
+        if any(elem in i for i in pathlist):
+            lst = subLists(pathlist,elem)
+            lst = remMerge(lst,elem)
+            lst.insert(0,elem)
+            sub.append(lst)
+    res = []
+    for i in sub:
+        if i not in res:
+            res.append(i)
+    path.append(res)
+    return path
+    #print(path)
+    
+pathlist=multicast_path_list("10.0.0.10",["10.0.4.20","10.0.3.20"])
+multicast_path2(pathlist)
