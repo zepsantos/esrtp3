@@ -34,7 +34,6 @@ def handle_RPeers(info):
     node.set_status(NodeStatus.FACK)
     node.set_id(message.get_sender_id())
     ott.add_neighbour(message.get_neighbours())
-    ott.add_clients(message.get_clients())
 
 
 def handle_SPeers(info):
@@ -43,10 +42,9 @@ def handle_SPeers(info):
     if ott.bootstrapper:
         noderepr = ott.get_network_config()[node.get_addr()]
         neighbors = noderepr['neighbors']
-        clients = noderepr['clients']
-        speersmessage = SPeersMessage(ott.get_ott_id(), neighbors, clients)
+        speersmessage = SPeersMessage(ott.get_ott_id(), neighbors)
     else:
-        speersmessage = SPeersMessage(ott.get_ott_id(), [], [])
+        speersmessage = SPeersMessage(ott.get_ott_id(), [])
     node.set_status(NodeStatus.WACK)
     tmp = pickle.dumps(speersmessage)
     return tmp
@@ -81,6 +79,7 @@ def handle_connectedR(info):
     #logging.debug(f' reach_destination: {reached_destination}')
     if not reached_destination:
         nextdestination_id = tracker.get_next_channel()
+        logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
         ott.add_toDispatch(nextdestination_id, message)
     else:
         if message.get_type() == MessageType.DATA:

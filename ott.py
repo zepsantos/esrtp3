@@ -13,6 +13,7 @@ import common
 from time import sleep
 
 from requestStream import RequestStreamMessage
+from tracker import Tracker
 
 HOST = '0.0.0.0'
 PORT = 7000
@@ -32,7 +33,6 @@ class Ott:
         self.selector = selectors.DefaultSelector()
         self.selector.register(self.main_socket, selectors.EVENT_READ,
                                data={'handler': self.accept_connection, 'node': None})
-        self.clients = []
         self.bootstrapper = False
         self.addr = self.main_socket.getsockname()[0]
         self.id = common.generate_id(HOST, PORT)
@@ -98,8 +98,7 @@ class Ott:
     def get_ott_id(self):
         return self.id
 
-    def add_clients(self, clients):
-        self.clients.append(clients)
+
 
     def handleWrite(self, node):
         status = node.get_status()
@@ -225,12 +224,20 @@ class Ott:
         return addrToId
 
     # Adiciona uma stream a transmitir pelo nosso path
-    def add_stream(self, packet, addr , path):
-        id = self.get_addr_to_id().get(addr, None)
-        if id is not None:
+    def send_data(self, packet, addr , path):
+        logging.debug(f'Sending data to {path}')
+        addr_dic = self.get_addr_to_id()
+        path_id = list(map(lambda a: addr_dic.get(a, None), path))
+        if None not in path_id:
+            id = addr_dic.get(addr, None)
+            if id is not None:
+                tracker = Tracker(path_id)
+                datapacket = DataMessage(id,tracker,packet)
+                self.add_toDispatch(tracker.get_next_channel(), datapacket)
+        else:
+            logging.debug('Client not found')
 
-            datapacket = DataMessage(id,path,packet)
-            self.add_toDispatch(id, datapacket)
+
 
     def setDataCallback(self, callback):
         self.dataCallback = callback

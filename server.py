@@ -27,6 +27,7 @@ class Server:
         self.initOtt()
         self.initServer()
 
+
     def initOtt(self):
         """
         Initializes the server.
@@ -34,7 +35,7 @@ class Server:
         global ott_manager
         bootstrapper_info = {}
         ott_manager = Ott(bootstrapper_info)
-        threading.Thread(target=ott_manager.serve_forever()).start()
+        threading.Thread(target=ott_manager.serve_forever).start()
         return
 
     def initServer(self):
@@ -42,7 +43,8 @@ class Server:
         Initializes the server.
         """
         socketServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        socketServer.bind(('', 20000))
+        socketServer.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        socketServer.bind(('10.0.0.10', 20000))
         socketServer.listen(5)
         while True:
             clientSocket, address = socketServer.accept()
@@ -59,6 +61,8 @@ class Server:
         """
         try:
             self.clientInfo[address[0]] = VideoStream(message)
+            logging.debug("Starting thread to send video to client with address %s", address[0])
+            self.sendThroughOtt(address[0])
         except IOError:
             self.clientInfo[address[0]] = VideoStream(self.filename)
         return
@@ -72,12 +76,13 @@ class Server:
             if data:
                 frameNumber = self.clientInfo[address].frameNbr()
                 packet = self.makeRtp(data, frameNumber)
-                ott_manager.add_stream(packet, address, path)
+                ott_manager.send_data(packet, address, path)
 
 
 
     def getPathToGo(self,addr):
-        path = paths.shortest_path('10.0.0.10',addr)
+        graph = paths.initGraph()
+        path = paths.shortest_path('10.0.0.10',addr,graph)
         return path[1:]
 
     def makeRtp(self, payload, frameNbr):
