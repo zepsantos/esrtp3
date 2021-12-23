@@ -14,7 +14,7 @@ import nodeprotocol
 import json
 import common
 from time import sleep
-
+from netifaces import interfaces, ifaddresses, AF_INET
 from pingMessage import pingMessage
 from requestStream import RequestStreamMessage
 from tracker import Tracker
@@ -31,14 +31,16 @@ class Ott:
     def __init__(self, bootstrapper_info):
         self.nodes = {}
         self.node_id = {}
+        self.addr = self.get_node_ip()
+        print(self.addr)
         self.main_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.main_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.main_socket.bind((HOST, PORT))
+        self.main_socket.bind((self.addr, PORT))
         self.main_socket.listen(5)
         self.poll = select.poll()
         self.poll.register(self.main_socket.fileno(), select.POLLIN)
         self.bootstrapper = False
-        self.addr = self.main_socket.getsockname()[0]
+
         self.id = common.generate_id(HOST, PORT)
         self.executor = ThreadPoolExecutor(num_of_threads)
         logging.info(f'Ott id: {self.id}')
@@ -51,6 +53,11 @@ class Ott:
         self.neighbours = []
         self.toDispatch = {}
 
+    def get_node_ip(self):
+        interf = interfaces()
+        tmp = ifaddresses(interf[1]).setdefault(AF_INET, [{'addr': '0.0.0.0'}])
+        return tmp[0]['addr']
+
     def accept_connection(self, key):
         conn, addr = self.main_socket.accept()
         logging.info(f'Accepted connection from {addr}')
@@ -60,7 +67,7 @@ class Ott:
         status, ournode = self.check_node_address(nodeconn.get_addr())
         if status:
             ournode.received_connection(nodeconn)
-            #self.selector.unregister(nodeconn.get_socket())
+            # self.selector.unregister(nodeconn.get_socket())
         else:
             ournode = nodeconn
             self.nodes[nodeconn.get_id()] = nodeconn
@@ -83,7 +90,7 @@ class Ott:
         self.nodes.pop(node)
 
     def get_nodes(self):
-        return list(map(lambda node: node.get_addr(), self.nodes.values()))
+        return self.nodes.values()
 
     def handle_node_event(self, key, event):
         # if node is not self.neighbours
@@ -95,7 +102,7 @@ class Ott:
 
         if event & select.POLLIN:
             message = node.receive()
-            self.executor.submit(self.handleRead,(node, message))
+            self.executor.submit(self.handleRead, (node, message))
         if event & select.POLLOUT:
             self.executor.submit(self.handleWrite, node)
 
@@ -108,24 +115,22 @@ class Ott:
     def getNodeByfileno(self, fileno):
         return self.nodes[self.node_id[fileno]]
 
-    def nodeIsOffline(self,node):
+    def nodeIsOffline(self, node):
         self.poll.unregister(node.get_socket().fileno())
         self.node_id.pop(node.get_socket().fileno())
 
-
-    def handleRead(self,info):
-        node,message = info
+    def handleRead(self, info):
+        node, message = info
         if node is None:
             return
         if message:
-                # logging.debug(f'Received from {node.get_id()} : {message}')
-                message = pickle.loads(message)
-                status = node.get_status()
-                handler = nodeprotocol.get_handler(status, True)
-                if handler is None: return
-                info = {'node': node, 'message': message, 'ott': self}
-                handler(info)
-
+            # logging.debug(f'Received from {node.get_id()} : {message}')
+            message = pickle.loads(message)
+            status = node.get_status()
+            handler = nodeprotocol.get_handler(status, True)
+            if handler is None: return
+            info = {'node': node, 'message': message, 'ott': self}
+            handler(info)
 
     def get_ott_id(self):
         return self.id
@@ -150,9 +155,9 @@ class Ott:
                 events = self.poll.poll(1)
                 # For each new event, dispatch to its handler
                 for key, event in events:
-                    self.handler(key,event)
+                    self.handler(key, event)
         finally:
-            pass #close all sockets
+            pass  # close all sockets
 
     def handler(self, key, event):
         if key == self.main_socket.fileno():
@@ -189,10 +194,25 @@ class Ott:
     def is_bootstrapper(self):
         return self.bootstrapper
 
-    def add_neighbour(self, neighbour):
-        self.neighbours.append(neighbour)
-        for node in neighbour:
+    def add_neighbours(self, neighbours):
+        self.neighbours.extend(neighbours)
+        for node in neighbours:
             self.connect_to_node(node, 7000)
+
+    def get_neighbours(self):
+        if len(self.neighbours) == 0 and self.bootstrapper:
+            noderepr = self.network_config[self.addr]
+            neighbors = noderepr['neighbors']
+            self.neighbours.extend(neighbors)
+        return self.neighbours
+
+    def get_neighbours_nodesids(self):
+        res = []
+        tmp = self.get_addr_to_id()
+        for neig in self.get_neighbours():
+            print(neig)
+            res.append(tmp[neig])
+        return res
 
     def node_changed_id(self, id, newid):
         node = self.nodes.pop(id)
@@ -208,8 +228,9 @@ class Ott:
         node = self.nodes.get(id, None)
         if node is None: return
         dispatcher = self.toDispatch.get(id, [])
-      #  if dispatcher:
+        #  if dispatcher:
         #    self.poll.modify(node.get_socket().fileno(), select.POLLOUT)
+        print(message)
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
 
@@ -225,8 +246,8 @@ class Ott:
         ret = None
         if len(tmp) > 0:
             ret = tmp.pop(0)
-       # if len(tmp) == 0:
-           # self.poll.modify(self.nodes.get(id).get_socket().fileno(),select.POLLIN)
+        # if len(tmp) == 0:
+        # self.poll.modify(self.nodes.get(id).get_socket().fileno(),select.POLLIN)
         return ret
 
     def get_addr_to_id(self):
@@ -236,15 +257,16 @@ class Ott:
         return addrToId
 
     # Adiciona uma stream a transmitir pelo nosso path
-    def send_data(self, packet, addr, path):
+    def send_data(self, packet, addrs, path):
         addr_dic = self.get_addr_to_id()
         path_id = list(map(lambda a: addr_dic.get(a, None), path))
         if None not in path_id:
-            id = addr_dic.get(addr, None)
+            ids = list(map (lambda a: addr_dic[a], addrs))
             if id is not None:
-                tracker = Tracker(path_id)
+                tracker = Tracker(path_id, destination=ids)
                 datapacket = DataMessage(id, tracker, packet)
-                self.add_toDispatch(tracker.get_next_channel(), datapacket)
+                print(tracker.get_path())
+                self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
         else:
             logging.debug('Client not found')
 
@@ -255,23 +277,32 @@ class Ott:
         if None not in path_id:
             id = addr_dic.get(addr, None)
             if id is not None:
-                tracker = Tracker(path_id)
+                tracker = Tracker(path_id, destination=id)
                 datapacket = pingMessage(id, tracker)
-                self.add_toDispatch(tracker.get_next_channel(), datapacket)
+
+                self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
         else:
             logging.debug('Client not found')
+
+    def broadcast_message(self, addr):
+        info = {'ott': self}
+        status, node = self.check_node_address(addr)
+        if status:
+            id = node.get_id()
+            if id is not None:
+                tracker = Tracker([-1], destination=id)
+                datapacket = pingMessage(id, tracker)
+                info['message'] = datapacket
+                nodeprotocol.sendToAllNodes(info)
 
     def setDataCallback(self, callback):
         self.dataCallback = callback
 
-
-    def checkIfNodeIsNeighbour(self,node):
-        for neighbour in self.neighbours:
+    def checkIfNodeIsNeighbour(self, node):
+        for neighbour in self.get_neighbours():
             if node.get_addr() == neighbour:
                 return True
         return False
-
-
 
 
 def initOtt():

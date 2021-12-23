@@ -17,13 +17,17 @@ class Server:
         Initializes the server.
         """
         self.filename = "movie.Mjpeg"
+        self.clientInfo['videoStream'] = VideoStream(self.filename)
+        self.clientInfo['event'] = threading.Event()
+        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt)
         # videoStram
 
         return
 
 
     def main(self):
-        print(self.getPathToGo('10.0.3.20'))
+        #pathlist=paths.multicast_path_list("10.0.0.10",["10.0.4.20","10.0.3.20"])
+        #print( paths.multicast_path2(pathlist))
         self.initOtt()
         self.initServer()
 
@@ -49,33 +53,44 @@ class Server:
         while True:
             clientSocket, address = socketServer.accept()
             logging.info("Client connected from: %s", address)
-            message = clientSocket.recv(1024).decode()
-            threading.Thread(target=self.acceptStreamRequest, args=(address,message)).start()
-            clientSocket.close()
-        return
+            clientsids = self.clientInfo.get('clients',[])
+            if self.noClients():
+                self.clientInfo['event'].clear()
+                self.clientInfo['worker'].start()
+            clientsids.append(address[0])
+            self.clientInfo['clients'] = clientsids
+            self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
+            self.clientInfo['videoStream'] = VideoStream(self.filename)
+
+            try :
+                message = clientSocket.recv(1024).decode()
+
+            finally:
+                if self.noClients():
+                    self.clientInfo['event'].set()
+                clientSocket.close()
+                logging.info("Client disconnected from: %s", address)
 
 
-    def acceptStreamRequest(self,address,message):
-        """
-        Accepts a stream request.
-        """
-        try:
-            self.clientInfo[address[0]] = VideoStream(message)
-            self.sendThroughOtt(address[0])
-        except IOError:
-            self.clientInfo[address[0]] = VideoStream(self.filename)
-            self.sendThroughOtt(address[0])
-        return
+    def noClients(self):
+        return self.clientInfo.get('clients',[]) == []
 
-    def sendThroughOtt(self,address):
-        path = self.getPathToGo(address)
+    def sendThroughOtt(self):
+
         while True:
+            if self.noClients(): continue
+            if self.clientInfo['event'].isSet():
+                break
+            address,paths = self.clientInfo.get('path',(None,[]))
+            if address is None: continue
+            logging.debug(f'Sending to {address} through {paths}')
+            #ott_manager.broadcast_message(address)
             #ott_manager.send_ping(address, path)
-            data = self.clientInfo[address].nextFrame()
+            data = self.clientInfo['videoStream'].nextFrame()
             if data:
-                frameNumber = self.clientInfo[address].frameNbr()
+                frameNumber = self.clientInfo['videoStream'].frameNbr()
                 packet = self.makeRtp(data, frameNumber)
-                ott_manager.send_data(packet, address, path)
+                ott_manager.send_data(packet, self.clientInfo['clients'], paths)
             time.sleep(0.05)
 
 
@@ -88,6 +103,11 @@ class Server:
         graph = paths.initGraph()
         path = paths.shortest_path('10.0.0.10',addr,graph)
         return path[1:]
+
+    def getPathsToGo(self,addrs):
+        pathlist = paths.multicast_path_list("10.0.0.10", addrs)
+        path = paths.multicast_path2(pathlist)
+        return path[1],path[1:]
 
     def makeRtp(self, payload, frameNbr):
         """RTP-packetize the video data."""

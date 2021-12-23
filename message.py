@@ -56,3 +56,6 @@ class Message:
 
     def get_tracker(self):
         return self.tracker
+
+    def set_tracker(self,tracker):
+        self.tracker = tracker

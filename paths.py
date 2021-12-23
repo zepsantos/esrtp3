@@ -181,7 +181,6 @@ def multicast_path2(pathlist):
             if i not in res:
                 res.append(i)
         path.append(res)
-    print(path)
     return path
     #print(path)
     

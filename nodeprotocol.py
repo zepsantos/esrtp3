@@ -25,14 +25,13 @@ class NodeStatus(Enum):
     WACK = 8  # Waiting final ACK
 
 
-
 def handle_RPeers(info):
     message = info['message']
     node = info['node']
     ott = info['ott']
     if message.get_type() != MessageType.SPEERS: return
     node.set_id(message.get_sender_id())
-    ott.add_neighbour(message.get_neighbours())
+    ott.add_neighbours(message.get_neighbours())
     node.set_status(NodeStatus.FACK)
 
 
@@ -58,6 +57,7 @@ def handle_AckReceive(info):
     node.set_id(message.get_sender_id())
     node.set_status(NodeStatus.SPEERS)
 
+
 def handle_AckSend(info):
     ott = info['ott']
     node = info['node']
@@ -68,6 +68,24 @@ def handle_AckSend(info):
     return pickled
 
 
+def sendToAllNodes(info):
+    ott = info['ott']
+    message = info['message']
+    tracker = message.get_tracker()
+
+    maintracker = tracker.__clone__()
+    node_ids = ott.get_neighbours_nodesids()
+
+    maintracker.add_channels_visits(node_ids)
+    for node_id in node_ids:
+        print(f'Sending message to {node_id}')
+        if tracker.alreadyPassed(node_id):
+            continue
+        else:
+            message.set_tracker(maintracker)
+            ott.add_toDispatch(node_id, message)
+
+
 def handle_connectedR(info):
     node = info['node']
     ott = info['ott']
@@ -75,11 +93,22 @@ def handle_connectedR(info):
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
 
-    #logging.debug(f' reach_destination: {reached_destination}')
+    logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
     if not reached_destination:
-        nextdestination_id = tracker.get_next_channel()
-        #logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
-        ott.add_toDispatch(nextdestination_id, message)
+        tracker_nxt_channel = tracker.get_next_channel(ott.get_ott_id())
+        logging.debug(f' next channel: {tracker_nxt_channel}')
+        if tracker_nxt_channel == -1:
+            sendToAllNodes(info)
+        elif tracker_nxt_channel is list:
+            trackers = tracker.separateMulticast()
+            for t in trackers:
+                message.set_tracker(t)
+                tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
+                ott.add_toDispatch(tmp_nxt_channel, message)
+        else:
+            ott.add_toDispatch(tracker_nxt_channel, message)
+        # logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
+
     else:
         if message.get_type() == MessageType.DATA:
             ott.dataCallback(message.get_rtppacket())
@@ -90,10 +119,9 @@ def handle_connectedR(info):
             else:
                 logging.info("Received ping from server with delay: " + str(message.ping()))
                 tracker.send_back(message.get_sender_id())
-                #logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
+                # logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
-
 
 
 def handle_connectedW(info):
@@ -101,10 +129,12 @@ def handle_connectedW(info):
     ott = info['ott']
     toTransmit = ott.get_toDispatch(node.get_id())
     if toTransmit:
+        logging.debug(f'Received message to transmit {toTransmit}  to {node.get_id()}')
         pickled = pickle.dumps(toTransmit)
         return pickled
     else:
         return None
+
 
 def handle_AckConfirmation(info):
     node = info['node']
@@ -114,8 +144,8 @@ def handle_AckConfirmation(info):
     if message.get_sender_id() == node.get_id():
         node.set_status(NodeStatus.CONNECTED)
         if ott.is_bootstrapper() and ott.checkIfNodeIsNeighbour(node):
-            node.disconnect()
-
+            pass
+            # node.disconnect()
 
 
 def handle_AckConfirmationSend(info):
@@ -126,6 +156,7 @@ def handle_AckConfirmationSend(info):
     pickled = pickle.dumps(message)
     node.set_status(NodeStatus.CONNECTED)
     return pickled
+
 
 def get_handler(status, read):
     if read:
