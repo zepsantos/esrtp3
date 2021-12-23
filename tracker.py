@@ -4,12 +4,17 @@ import logging
 
 class Tracker:
     def __init__(self, channels, destination=None):
-        self.channels = channels
-        self.channels_jump_count = 0
-        self.channels_visited = set()
-        self.destination = destination
+        self.channels = channels  ## LISTA DE IDS DE NOS , FUNCIONA COMO LISTA ORDENADA DE CAMINHO E COMO INDICADOR DO PROXIMO PEER
+        self.channels_jump_count = 0 #CONTADOR DE SALTOS PARA SABERMOS ONDE ESTAMOS
+        self.channels_visited = set() # SET SO PARA SABER OS NODOS QUE JA VISITAMOS
+        self.destination = destination # DESTINO DA MENSAGEM
 
     def get_next_channel(self, current_node_id):
+        """
+         Função que é usada para avançar no path. Devemos chama-la sempre que queremos retransmitir a mensagem
+        :param current_node_id: str
+        :return: -1 se não conhecemos o caminho ou str com o id do nodo ou lista com o path para partir o multicast
+        """
         if self.channels[self.channels_jump_count] == -1:
             self.channels[self.channels_jump_count] = current_node_id
             self.channels_jump_count += 1
@@ -34,6 +39,11 @@ class Tracker:
         return self.channels_jump_count
 
     def reach_destination(self, current_node_id):
+        """
+        Destination é sempre uma lista, no caso do multicasting começa com uma lista de [nodo,nodo] como destino e acaba só com um [nodo]
+        :param current_node_id:
+        :return: bool
+        """
         return self.destination[0] == current_node_id
 
     def extend_channels(self, channels):
@@ -52,6 +62,7 @@ class Tracker:
         return self.destination
 
     def send_back(self, sender_id):
+        """ Envia a mensagem de volta, por onde veio"""
         path = list(self.get_path())
         path.reverse()
         path.pop(0)
@@ -59,12 +70,22 @@ class Tracker:
         self.extend_channels(path)
 
     def alreadyPassed(self, node_id):
+        """ Verifica se o nodo ja teve a mensagem"""
         return node_id in self.channels_visited
 
     def checkMulticast(self, channel):
+        """
+        Verifica se devemos partir o multicast
+        :param channel:
+        :return:
+        """
         return isinstance(channel, list)
 
     def separateMulticast(self):
+        """
+        Parte o multicast
+        :return:
+        """
         trackers = []
         channel = self.channels[self.channels_jump_count]
         if isinstance(channel, list):

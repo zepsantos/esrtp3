@@ -27,6 +27,11 @@ class NodeStatus(Enum):
 
 
 def handle_RPeers(info):
+    """
+    Handle para o estado WPEERS , recebe os vizinhos e adiciona-os à lista de nodos do ott(inicia a ligação com eles) , mete o nodo que recebeu esta mensagem no estado FACK(FINAL ACK)
+    :param info: info = {ott:ott, node:node , message:message}
+    :return:
+    """
     message = info['message']
     node = info['node']
     ott = info['ott']
@@ -37,6 +42,13 @@ def handle_RPeers(info):
 
 
 def handle_SPeers(info):
+    """
+    Handle para o estado SPEERS, envia os peers ao nodo ,
+    se for o bootstrapper envia os nodos do ficheiro se não for não envia nada mas esta mensagem vai nos permitir confirmar o id do server ,
+     o status do nodo no final fica em WACK(Waiting for ACK)
+    :param info: {ott:ott, node:node}
+    :return: A mensagem a enviar já serializada
+    """
     node = info['node']
     ott = info['ott']
     if ott.bootstrapper:
@@ -50,8 +62,13 @@ def handle_SPeers(info):
     return tmp
 
 
-# RECEBE O ACK E METE O NODO EM NodeStatus.SPEERS e da set do id do node
+
 def handle_AckReceive(info):
+    """
+     # RECEBE O ACK E METE O NODO EM NodeStatus.SPEERS e atualiza o id do node
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     message = info['message']
     node = info['node']
     if message.get_type() != MessageType.ACK: return
@@ -60,6 +77,12 @@ def handle_AckReceive(info):
 
 
 def handle_AckSend(info):
+    """
+    Envia o Ack para o peer e fica a espera de receber os seus vizinhos
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return: mensagem já serializada
+    """
+
     ott = info['ott']
     node = info['node']
     id = ott.get_ott_id()
@@ -70,6 +93,11 @@ def handle_AckSend(info):
 
 
 def sendToAllNodes(info):
+    """
+    Envia para todos os nodos que o ott tem como vizinhos evitando enviar para os que já receberam
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     ott = info['ott']
     message = info['message']
     tracker = message.get_tracker()
@@ -79,7 +107,6 @@ def sendToAllNodes(info):
 
     maintracker.add_channels_visits(node_ids)
     for node_id in node_ids:
-        print(f'Sending message to {node_id}')
         if tracker.alreadyPassed(node_id):
             continue
         else:
@@ -88,6 +115,11 @@ def sendToAllNodes(info):
 
 
 def handle_connectedR(info):
+    """
+    Trata de ler as mensagens e coloca-las no dispatcher associado ao id a enviar (id este obtido atraves do tracker)
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     node = info['node']
     ott = info['ott']
     message: Message = info['message']
@@ -126,6 +158,11 @@ def handle_connectedR(info):
 
 
 def handle_connectedW(info):
+    """
+    Trata de enviar as mensagens do Dispatcher
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return: Mensagem a enviar , serializada
+    """
     node = info['node']
     ott = info['ott']
     toTransmit = ott.get_toDispatch(node.get_id())
@@ -138,6 +175,12 @@ def handle_connectedW(info):
 
 
 def handle_AckConfirmation(info):
+    """
+    Confirma que ambas as partes sabem o id associado a cada
+    Se for o bootstrap desliga-se de todos os nodos a seguir ao handshake, exceto se forem seus vizinhos
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     node = info['node']
     ott = info['ott']
     message = info['message']
@@ -149,6 +192,11 @@ def handle_AckConfirmation(info):
 
 
 def handle_AckConfirmationSend(info):
+    """
+    Envia a primeira parte da confirmação do Ack das duas partes
+    :param info:
+    :return: mensagem, ja serializada
+    """
     node = info['node']
     ott = info['ott']
     id = ott.get_ott_id()
@@ -159,6 +207,12 @@ def handle_AckConfirmationSend(info):
 
 
 def get_handler(status, read):
+    """
+    Retorna o handler tendo em conta o tipo de evento(ler ou escrever) e o status do peer
+    :param status:
+    :param read:
+    :return:
+    """
     if read:
         dic = {
             NodeStatus.WACK: handle_AckConfirmation,
@@ -179,5 +233,3 @@ def get_handler(status, read):
     return tmp
 
 
-def nofunc(info):
-    pass

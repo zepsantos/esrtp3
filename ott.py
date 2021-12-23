@@ -59,11 +59,21 @@ class Ott:
         return tmp[0]['addr']
 
     def accept_connection(self, key):
+        """
+        Aceita uma conexao
+        :param key:
+        :return:
+        """
         conn, addr = self.main_socket.accept()
         logging.info(f'Accepted connection from {addr}')
         self.add_node(Node(addr[0], addr[1], conn))
 
     def add_node(self, nodeconn):
+        """
+        Adiciona um nodo ao ott e trata de registar o nodo para escuta no selector
+        :param nodeconn:
+        :return:
+        """
         """status, ournode = self.check_node_address(nodeconn.get_addr())
         if status:
             self.poll.unregister(nodeconn.get_socket())
@@ -78,17 +88,22 @@ class Ott:
         self.poll.register(nodeconn.get_socket().fileno(), select.POLLIN | select.POLLOUT)
 
     def node_changed_id(self, id, newid):
+        """
+        Callback para quando recebemos uma mensagem com um id para atualizarmos
+        :param id: id temporario
+        :param newid: id a atualizar
+        :return:
+        """
         node = None
         if newid in self.nodes.keys(): #No caso de um node que se conecta e ja esta na rede ja o conhecemos
             node = self.nodes[newid] # O que nós já temos
-            newconnnode = self.nodes.pop(id) # O que o node que está a tentar se conectar
+            newconnnode = self.nodes.pop(id) # O do node que está a tentar se conectar
+            self.poll.unregister(node.get_socket().fileno()) # Tiramos do selector o nodo com a ligaçao antiga
             node.set_socket(newconnnode.get_socket()) # Atualizamos o socket do node que já temos
-            node.set_addr(newconnnode.get_addr())
-            node.set_id(newconnnode.get_id())
-            self.nodes[newid] = node # Atualizamos o node que já temos , talvez nao precisemos de dar update ao nodo
-            self.node_id[node.get_socket().fileno()] = newid
-           # self.poll.unregister(newconnnode.get_socket().fileno())
-            self.poll.unregister(node.get_socket().fileno())
+            node.set_addr(newconnnode.get_addr()) # Atualizamos o endereço no caso do endereço do nodo estar a usar uma interface diferente para se conectar
+            node.set_change_idcallback(None) # Se nao fizemos isto entravamos num loop a seguir com o node.set_id
+            node.set_id(newid) # Mudamos o id do nodo para o id que recebemos
+            node.set_change_idcallback(self.node_changed_id)
             self.remove_node(newconnnode)
         else:
             node = self.nodes.pop(id)
@@ -102,22 +117,31 @@ class Ott:
 
 
     def connect_to_node(self, addr, port):
+        """
+        Faz um pedido para ligar a um nodo
+        :param addr:
+        :param port:
+        :return:
+        """
         logging.debug(f'Connecting to {addr}:{port}')
-        inNetwork, node = self.check_node_address(addr)
-        if not inNetwork:
-            node = Node(addr, port)
-            self.add_node(node)
-        else:  ## TODO: check if node is connected if not reconnect (open the discriptor and read(provavelmente))
-            node.reconnect()
-            return
+        node = Node(addr, port)
+        self.add_node(node)
+        return
 
     def remove_node(self, node):
-        self.nodes.pop(node)
+        del self.nodes[node.get_id()]
 
     def get_nodes(self):
         return self.nodes.values()
 
+
     def handle_node_event(self, key, event):
+        """
+        Tendo em conta o status do event(se lê , escreve ou erro) passa a respetiva funçao para uma pool de threads
+        :param key: descritor de ficheiro
+        :param event: POLLIN | POLLOUT | POLLHUP
+        :return:
+        """
         # if node is not self.neighbours
         id = self.node_id.get(key, None)
         node = self.nodes.get(id, None)
@@ -131,20 +155,36 @@ class Ott:
         if event & select.POLLOUT:
             self.executor.submit(self.handleWrite, node)
 
-        if event & select.EPOLLHUP:
+        if event & select.POLLHUP:
             node = self.getNodeByfileno(key)
             self.poll.unregister(key)
             node.get_socket().close()
             del self.node_id[key]
 
+
     def getNodeByfileno(self, fileno):
+        """
+        Recebe um descritor de ficheiro e retorna o id associado ao descritor
+        :param fileno:
+        :return:
+        """
         return self.nodes[self.node_id[fileno]]
 
     def nodeIsOffline(self, node):
+        """
+        Callback para quando um no fica offline
+        :param node:
+        :return:
+        """
         self.poll.unregister(node.get_socket().fileno())
         self.node_id.pop(node.get_socket().fileno())
 
     def handleRead(self, info):
+        """
+        Passa a mensagem a função correspondente ao status em que o nodo está
+        :param info: tuple (node,message)
+        :return:
+        """
         node, message = info
         if node is None:
             return
@@ -158,9 +198,18 @@ class Ott:
             handler(info)
 
     def get_ott_id(self):
+        """
+        Retorna o id do ott
+        :return: str
+        """
         return self.id
 
     def handleWrite(self, node):
+        """
+        Trata de escrever para o nodo tendo em conta o status em que o nodo está
+        :param node:
+        :return:
+        """
         if node is None: return
         status = node.get_status()
         tosend = None
@@ -174,6 +223,10 @@ class Ott:
         # return tosend
 
     def serve_forever(self):
+        """
+        Mantém o ott a funcionar ativamente, procurando por eventos no selector
+        :return:
+        """
         try:
             while True:
                 time.sleep(0.01)
@@ -185,29 +238,53 @@ class Ott:
             pass  # close all sockets
 
     def handler(self, key, event):
+        """
+        Se o descritor do ficheiro (key) for o do main socket do ott então aceitamos a conexão , senão passamos o tipo de evento e o descritor ao handler
+        :param key:
+        :param event:
+        :return:
+        """
         if key == self.main_socket.fileno():
             self.accept_connection(key)
         else:
             self.handle_node_event(key, event)
 
     def connect_to_bootstrapper(self, bootstrapper_info):
+        """
+        Trata de iniciar a ligação ao bootstrapper
+        :param bootstrapper_info:
+        :return:
+        """
         addr = bootstrapper_info['addr']
         port = bootstrapper_info['port']
         self.connect_to_node(addr, port)
 
-    # Checks if we already have a connection with the node by his address
     def check_node_address(self, node_addr):
+        """
+            # Checks if we already have a connection with the node by his address
+
+        :param node_addr: str
+        :return: (bool,node)
+        """
         for node in self.nodes.values():
             if node.get_addr() == node_addr:
                 return True, node
         return False, None
 
     def load_network_config(self):
+        """
+        Lê a config da network para no futuro enviar aos peers
+        :return:
+        """
         with open('networkconfigotim.json', 'r') as f:
             self.network_config = json.load(f)  # load networkconfig.json
 
-    # Verifica se o id existe
     def check_id(self, id):
+        """
+        Verifica se o id existe
+        :param id:
+        :return:
+        """
         return self.nodes.get(id) is None
 
     def get_network_config(self):
@@ -217,14 +294,27 @@ class Ott:
         return self.poll
 
     def is_bootstrapper(self):
+        """
+        Se o ott é o bootstrapper
+        :return:
+        """
         return self.bootstrapper
 
     def add_neighbours(self, neighbours):
+        """
+        Adiciona os vizinhos que recebeu do bootstrapper
+        :param neighbours:
+        :return:
+        """
         self.neighbours.extend(neighbours)
         for node in neighbours:
             self.connect_to_node(node, 7000)
 
     def get_neighbours(self):
+        """
+        Retorna a lista de vizinhos. Se a lista de vizinhos do bootstrapper ainda não foi iniciada , iniciamos
+        :return:
+        """
         if len(self.neighbours) == 0 and self.bootstrapper:
             noderepr = self.network_config[self.addr]
             neighbors = noderepr['neighbors']
@@ -232,6 +322,10 @@ class Ott:
         return self.neighbours
 
     def get_neighbours_nodesids(self):
+        """
+        Função usada pela inundação controlada para enviar aos nodos vizinhos
+        :return: lista de ids dos nodos vizinhos
+        """
         res = []
         tmp = self.get_addr_to_id()
         for neig in self.get_neighbours():
@@ -249,6 +343,9 @@ class Ott:
         # data = {'handler': self.handle_node_event, 'node': node}"""
 
     def add_toDispatch(self, id, message):
+        """
+         Adiciona ao dispatcher a entrada {id:Lista de mensagens a enviar para o nodo} sendo que o dispatcher tem um formato {id:[mensagens]}
+        """
         node = self.nodes.get(id, None)
         if node is None: return
         dispatcher = self.toDispatch.get(id, [])
@@ -257,7 +354,15 @@ class Ott:
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
 
+
+
     def add_toDispatchByAddr(self, addr, message):
+        """
+        Função que dá dispatch através do id , só quando conhecemos o nodo
+        :param addr:
+        :param message:
+        :return:
+        """
         id = self.get_addr_to_id().get(addr, None)
         if id is not None:
             self.add_toDispatch(id, message)
@@ -265,6 +370,11 @@ class Ott:
             logging.debug('Node not found')  ## Envia para todos?
 
     def get_toDispatch(self, id):
+        """
+        Retorna um item que o nodo[id] tenha para enviar  , não era de todo mau este dispatch retornar a lista com X itens
+        :param id:
+        :return: Item a dar dispatch
+        """
         tmp = self.toDispatch.get(id, [])
         ret = None
         if len(tmp) > 0:
@@ -274,6 +384,10 @@ class Ott:
         return ret
 
     def get_addr_to_id(self):
+        """
+        Gera um dicionario de {address:id}
+        :return: {address:id}
+        """
         addrToId = {}
         for node in self.nodes.values():
             addrToId[node.get_addr()] = node.get_id()
@@ -283,10 +397,16 @@ class Ott:
 
     # Adiciona uma stream a transmitir pelo nosso path
     def send_data(self, packet, addrs, path):
+        """
+        Adiciona uma stream a transmitir pelo nosso path
+        :param packet: packet rdp encapsulado pelo dataMessage
+        :param addrs: [endereços dos destinos]
+        :param path: [Caminho de endereços]
+        :return:
+        """
         addr_dic = self.get_addr_to_id()
         path_id = self.convertPathToId(path)
         logging.debug(f'path_id: {path_id}')
-        #time.sleep(5)
         if None not in path_id:
             ids = list(map(lambda a: addr_dic[a], addrs))
             if id is not None:
@@ -299,6 +419,11 @@ class Ott:
 
 
     def convertPathToId(self, l):
+        """
+        Funçao que converte o path em addr para path id
+        :param l:
+        :return:
+        """
         tmp = []
         addr_dic = self.get_addr_to_id()
         for p in l:
@@ -310,6 +435,12 @@ class Ott:
 
 
     def send_ping(self, addr, path):
+        """
+        Função usada para o server enviar um ping ao addr que quiser pelo path que fornece
+        :param addr: str
+        :param path: [addr]
+        :return:
+        """
         logging.debug('Sending ping')
         addr_dic = self.get_addr_to_id()
         path_id = list(map(lambda a: addr_dic.get(a, None), path))
@@ -324,6 +455,11 @@ class Ott:
             logging.debug('Client not found')
 
     def broadcast_message(self, addr):
+        """
+        Envia mensagem para um endereço sem saber o caminho(Inundação controlada)
+        :param addr:
+        :return:
+        """
         info = {'ott': self}
         status, node = self.check_node_address(addr)
         if status:
@@ -335,9 +471,19 @@ class Ott:
                 nodeprotocol.sendToAllNodes(info)
 
     def setDataCallback(self, callback):
+        """
+        Set do callback do cliente para ser notificado que chegou data para ele
+        :param callback:
+        :return:
+        """
         self.dataCallback = callback
 
     def checkIfNodeIsNeighbour(self, node):
+        """
+        Verifica se o nodo é vizinho
+        :param node:
+        :return:
+        """
         for neighbour in self.get_neighbours():
             if node.get_addr() == neighbour:
                 return True
