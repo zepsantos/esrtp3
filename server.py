@@ -61,23 +61,27 @@ class Server:
         """
         try:
             self.clientInfo[address[0]] = VideoStream(message)
-            logging.debug("Starting thread to send video to client with address %s", address[0])
             self.sendThroughOtt(address[0])
         except IOError:
             self.clientInfo[address[0]] = VideoStream(self.filename)
+            self.sendThroughOtt(address[0])
         return
 
     def sendThroughOtt(self,address):
         path = self.getPathToGo(address)
         while True:
-            time.sleep(0.2)
-
+            #ott_manager.send_ping(address, path)
             data = self.clientInfo[address].nextFrame()
             if data:
                 frameNumber = self.clientInfo[address].frameNbr()
                 packet = self.makeRtp(data, frameNumber)
                 ott_manager.send_data(packet, address, path)
+            time.sleep(0.05)
 
+
+    def sendPingToClient(self,address):
+        path = self.getPathToGo(address)
+        ott_manager.send_ping(address, path)
 
 
     def getPathToGo(self,addr):
@@ -99,7 +103,7 @@ class Server:
         rtpPacket = RtpPacket()
 
         rtpPacket.encode(version, padding, extension, cc, seqnum, marker, pt, ssrc, payload)
-        print("Encoding RTP Packet: " + str(seqnum))
+        #print("Encoding RTP Packet: " + str(seqnum))
 
         return rtpPacket.getPacket()
 

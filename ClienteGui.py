@@ -18,6 +18,7 @@ class ClienteGUI:
         self.master.protocol("WM_DELETE_WINDOW", self.handler)
         self.createWidgets()
         self.rtspSeq = 0
+        self.dataPacket = []
         self.sessionId = 0
         self.requestSent = -1
         self.teardownAcked = 0
@@ -77,7 +78,6 @@ class ClienteGUI:
 
     def listenOtt(self,data):
         """Listen for RTP packets."""
-        logging.debug("RECEIVED STREAM DATA")
         if not data:
             return
 
@@ -85,11 +85,12 @@ class ClienteGUI:
         rtpPacket.decode(data)
 
         currFrameNbr = rtpPacket.seqNum()
-        print("Current Seq Num: " + str(currFrameNbr))
 
         if currFrameNbr > self.frameNbr:  # Discard the late packet
             self.frameNbr = currFrameNbr
             self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
+
+
 
 
     def writeFrame(self, data):

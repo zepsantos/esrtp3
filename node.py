@@ -6,12 +6,11 @@ import common
 
 class Node():
 
-    def __init__(self, ott, addr, port, sock=None, id=None, callback=None):
+    def __init__(self, addr, port, sock=None, id=None):
         self.addr = addr
-        self.callback = callback
         self.port = port
-
-        self.ott = ott
+        self.offlinecallback = None
+        self.change_idcallback = None
         if sock is None:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.connect()
@@ -30,6 +29,12 @@ class Node():
     def get_socket(self):
         return self.sock
 
+    def set_nodeofflinecallback(self,callback):
+        self.offlinecallback = callback
+
+    def set_change_idcallback(self, callback):
+        self.change_idcallback = callback
+
     def connect(self):
         try:
             logging.debug("Connecting to node: " + str(self.addr) + ":" + str(self.port))
@@ -41,6 +46,7 @@ class Node():
 
     def disconnect(self):
         self.sock.close()
+        self.set_status(nodeprotocol.NodeStatus.OFFLINE)
 
     def reconnect(self):
         if self.get_status() == nodeprotocol.NodeStatus.OFFLINE:
@@ -57,12 +63,34 @@ class Node():
 
     def set_status(self, status):
         self.status = status
-        logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
+        if self.status == nodeprotocol.NodeStatus.OFFLINE:
+            if self.offlinecallback is not None:
+                self.offlinecallback(self)
+        #logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
 
     def set_id(self, newid):
         tmp = self.id
         self.id = newid
-        self.ott.node_changed_id(tmp, newid)
+        self.change_idcallback(tmp, newid)
+
+    def send(self,data):
+        try:
+            self.sock.send(data)
+        except socket.error:
+            self.reconnect()
+            self.sock.send(data)
+
+
+    def receive(self):
+        try:
+            data = self.sock.recv(23000)
+            if data:
+                return data
+            else:
+                return None
+        except socket.error:
+            self.reconnect()
+            return None
 
     def received_connection(self, connnode):
         self.addr = connnode.get_addr()

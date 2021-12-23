@@ -25,15 +25,15 @@ class NodeStatus(Enum):
     WACK = 8  # Waiting final ACK
 
 
-## VERIFICAR SE AINDA NAO EXISTE LIGACAO QUANDO O NODE ESTA A LIGAR SE AOS PEERS
+
 def handle_RPeers(info):
     message = info['message']
     node = info['node']
     ott = info['ott']
     if message.get_type() != MessageType.SPEERS: return
-    node.set_status(NodeStatus.FACK)
     node.set_id(message.get_sender_id())
     ott.add_neighbour(message.get_neighbours())
+    node.set_status(NodeStatus.FACK)
 
 
 def handle_SPeers(info):
@@ -55,9 +55,8 @@ def handle_AckReceive(info):
     message = info['message']
     node = info['node']
     if message.get_type() != MessageType.ACK: return
-    node.set_status(NodeStatus.SPEERS)
     node.set_id(message.get_sender_id())
-
+    node.set_status(NodeStatus.SPEERS)
 
 def handle_AckSend(info):
     ott = info['ott']
@@ -79,19 +78,17 @@ def handle_connectedR(info):
     #logging.debug(f' reach_destination: {reached_destination}')
     if not reached_destination:
         nextdestination_id = tracker.get_next_channel()
-        logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
+        #logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
         ott.add_toDispatch(nextdestination_id, message)
     else:
         if message.get_type() == MessageType.DATA:
-            logging.debug('calling callback')
-            logging.debug(ott.dataCallback)
             ott.dataCallback(message.get_rtppacket())
         elif message.get_type() == MessageType.PING:
             if (ott.bootstrapper):
                 delay = message.ping()
                 logging.info(f'Received ping with delay: {delay}')
             else:
-                logging.info("Received ping from bootstrap with delay: " + str(message.ping()))
+                logging.info("Received ping from server with delay: " + str(message.ping()))
                 tracker.send_back(message.get_sender_id())
                 #logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
@@ -116,6 +113,9 @@ def handle_AckConfirmation(info):
     if message.get_type() != MessageType.ACK: return
     if message.get_sender_id() == node.get_id():
         node.set_status(NodeStatus.CONNECTED)
+        if ott.is_bootstrapper() and ott.checkIfNodeIsNeighbour(node):
+            node.disconnect()
+
 
 
 def handle_AckConfirmationSend(info):
