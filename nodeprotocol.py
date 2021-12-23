@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from enum import Enum
 import pickle
 from message import Message, MessageType
@@ -89,21 +90,21 @@ def sendToAllNodes(info):
 def handle_connectedR(info):
     node = info['node']
     ott = info['ott']
-    message = info['message']
+    message: Message = info['message']
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
 
-    logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
+    #logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
     if not reached_destination:
         tracker_nxt_channel = tracker.get_next_channel(ott.get_ott_id())
-        logging.debug(f' next channel: {tracker_nxt_channel}')
         if tracker_nxt_channel == -1:
             sendToAllNodes(info)
-        elif tracker_nxt_channel is list:
+        elif isinstance(tracker_nxt_channel,list):
             trackers = tracker.separateMulticast()
             for t in trackers:
-                message.set_tracker(t)
+               # logging.debug(f'Sending message to {t.get_path()}')
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
+                message.set_tracker(t)
                 ott.add_toDispatch(tmp_nxt_channel, message)
         else:
             ott.add_toDispatch(tracker_nxt_channel, message)
@@ -143,9 +144,8 @@ def handle_AckConfirmation(info):
     if message.get_type() != MessageType.ACK: return
     if message.get_sender_id() == node.get_id():
         node.set_status(NodeStatus.CONNECTED)
-        if ott.is_bootstrapper() and ott.checkIfNodeIsNeighbour(node):
-            pass
-            # node.disconnect()
+        if ott.is_bootstrapper() and not ott.checkIfNodeIsNeighbour(node):
+           node.disconnect()
 
 
 def handle_AckConfirmationSend(info):

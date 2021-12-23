@@ -66,7 +66,7 @@ class Node():
         if self.status == nodeprotocol.NodeStatus.OFFLINE:
             if self.offlinecallback is not None:
                 self.offlinecallback(self)
-        #logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
+        logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
 
     def set_id(self, newid):
         tmp = self.id
@@ -77,7 +77,7 @@ class Node():
         try:
             self.sock.send(data)
         except socket.error:
-            self.reconnect()
+            self.connect()
             self.sock.send(data)
 
 

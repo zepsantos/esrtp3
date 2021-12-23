@@ -56,21 +56,26 @@ class Server:
             clientsids = self.clientInfo.get('clients',[])
             if self.noClients():
                 self.clientInfo['event'].clear()
-                self.clientInfo['worker'].start()
             clientsids.append(address[0])
             self.clientInfo['clients'] = clientsids
-            self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
-            self.clientInfo['videoStream'] = VideoStream(self.filename)
+            threading.Thread(target=self.clientWorker,args=(clientSocket,address[0])).start()
 
-            try :
-                message = clientSocket.recv(1024).decode()
 
-            finally:
-                if self.noClients():
-                    self.clientInfo['event'].set()
-                clientSocket.close()
-                logging.info("Client disconnected from: %s", address)
 
+    def clientWorker(self,clientSocket, address):
+        self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
+        self.clientInfo['videoStream'] = VideoStream(self.filename)
+        try:
+            message = clientSocket.recv(1024).decode()
+
+        finally:
+            if self.noClients():
+                self.clientInfo['event'].set()
+            self.clientInfo['clients'].remove(address)
+            logging.debug("Client disconnected from: %s", address)
+            clientSocket.close()
+
+            logging.info("Client disconnected from: %s", address)
 
     def noClients(self):
         return self.clientInfo.get('clients',[]) == []
@@ -83,7 +88,6 @@ class Server:
                 break
             address,paths = self.clientInfo.get('path',(None,[]))
             if address is None: continue
-            logging.debug(f'Sending to {address} through {paths}')
             #ott_manager.broadcast_message(address)
             #ott_manager.send_ping(address, path)
             data = self.clientInfo['videoStream'].nextFrame()
@@ -107,7 +111,7 @@ class Server:
     def getPathsToGo(self,addrs):
         pathlist = paths.multicast_path_list("10.0.0.10", addrs)
         path = paths.multicast_path2(pathlist)
-        return path[1],path[1:]
+        return path[1],path
 
     def makeRtp(self, payload, frameNbr):
         """RTP-packetize the video data."""

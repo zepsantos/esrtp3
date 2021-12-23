@@ -3,7 +3,7 @@ import logging
 
 
 class Tracker:
-    def __init__(self, channels,destination = None):
+    def __init__(self, channels, destination=None):
         self.channels = channels
         self.channels_jump_count = 0
         self.channels_visited = set()
@@ -18,7 +18,7 @@ class Tracker:
         else:
             self.channels_visited.add(current_node_id)
             self.channels_jump_count += 1
-            tmp = self.channels[self.channels_jump_count - 1]
+            tmp = self.channels[self.channels_jump_count]
             return tmp
 
     def add_channel_visit(self, node_id):
@@ -61,40 +61,35 @@ class Tracker:
     def alreadyPassed(self, node_id):
         return node_id in self.channels_visited
 
-
-    def checkMulticast(self,channel):
-        return channel is list
+    def checkMulticast(self, channel):
+        return isinstance(channel, list)
 
     def separateMulticast(self):
-        tmp_jump_counts = 0
         trackers = []
-        for channel in self.channels:
-            if isinstance(channel, list):
-                alreadyvisited = dropMulticastPath(self.get_path(), channel)
-                dst = 0
-                for l in channel:
-                    pathToTracker = alreadyvisited + l
-                    nt = self.__clone__()
-                    nt.set_destination([self.destination[dst]])
-                    nt.set_path(pathToTracker)
-                    trackers.append(nt)
-                    dst += 1
-            else:
-                tmp_jump_counts += 1
+        channel = self.channels[self.channels_jump_count]
+        if isinstance(channel, list):
+            alreadyvisited = dropMulticastPath(self.get_path(), channel)
+            dst = 0
+            for ls in channel:
+                pathToTracker = alreadyvisited + ls
+                nt = self.__clone__()
+                nt.set_destination([self.destination[dst]])
+                nt.set_path(pathToTracker)
+                trackers.append(nt)
+                dst += 1
         return trackers
 
     def __clone__(self):
-        t = Tracker(self.channels,destination = self.destination)
+        t = Tracker(self.channels, destination=self.destination)
         t.channels_jump_count = self.channels_jump_count
         t.channels_visited = set(self.channels_visited)
         return t
 
-    def set_destination(self,destination):
+    def set_destination(self, destination):
         self.destination = destination
 
+
 def dropMulticastPath(entirepath, multicastpath):
-        singlepath = list(entirepath)
-        singlepath.remove(multicastpath)
-        return singlepath
-
-
+    singlepath = list(entirepath)
+    singlepath.remove(multicastpath)
+    return singlepath

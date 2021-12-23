@@ -3,6 +3,7 @@ import select
 import selectors
 import socket
 import pickle
+import string
 import sys
 import threading
 import time
@@ -32,7 +33,6 @@ class Ott:
         self.nodes = {}
         self.node_id = {}
         self.addr = self.get_node_ip()
-        print(self.addr)
         self.main_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.main_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.main_socket.bind((self.addr, PORT))
@@ -64,17 +64,42 @@ class Ott:
         self.add_node(Node(addr[0], addr[1], conn))
 
     def add_node(self, nodeconn):
-        status, ournode = self.check_node_address(nodeconn.get_addr())
+        """status, ournode = self.check_node_address(nodeconn.get_addr())
         if status:
+            self.poll.unregister(nodeconn.get_socket())
             ournode.received_connection(nodeconn)
-            # self.selector.unregister(nodeconn.get_socket())
         else:
             ournode = nodeconn
-            self.nodes[nodeconn.get_id()] = nodeconn
+            self.nodes[ournode.get_id()] = ournode"""
+        self.nodes[nodeconn.get_id()] = nodeconn
         nodeconn.set_change_idcallback(self.node_changed_id)
         nodeconn.set_nodeofflinecallback(self.nodeIsOffline)
-        self.node_id[nodeconn.get_socket().fileno()] = ournode.get_id()
+        self.node_id[nodeconn.get_socket().fileno()] = nodeconn.get_id()
         self.poll.register(nodeconn.get_socket().fileno(), select.POLLIN | select.POLLOUT)
+
+    def node_changed_id(self, id, newid):
+        node = None
+        if newid in self.nodes.keys(): #No caso de um node que se conecta e ja esta na rede ja o conhecemos
+            node = self.nodes[newid] # O que nós já temos
+            newconnnode = self.nodes.pop(id) # O que o node que está a tentar se conectar
+            node.set_socket(newconnnode.get_socket()) # Atualizamos o socket do node que já temos
+            node.set_addr(newconnnode.get_addr())
+            node.set_id(newconnnode.get_id())
+            self.nodes[newid] = node # Atualizamos o node que já temos , talvez nao precisemos de dar update ao nodo
+            self.node_id[node.get_socket().fileno()] = newid
+           # self.poll.unregister(newconnnode.get_socket().fileno())
+            self.poll.unregister(node.get_socket().fileno())
+            self.remove_node(newconnnode)
+        else:
+            node = self.nodes.pop(id)
+        dispatcher_oldid = self.toDispatch.pop(id, [])
+        dispatcher_newid = self.toDispatch.pop(newid, [])
+        dispatcher_newid.extend(dispatcher_oldid)
+        self.toDispatch[newid] = dispatcher_newid
+        self.node_id[node.get_socket().fileno()] = newid
+        self.nodes[newid] = node
+
+
 
     def connect_to_node(self, addr, port):
         logging.debug(f'Connecting to {addr}:{port}')
@@ -210,11 +235,10 @@ class Ott:
         res = []
         tmp = self.get_addr_to_id()
         for neig in self.get_neighbours():
-            print(neig)
             res.append(tmp[neig])
         return res
 
-    def node_changed_id(self, id, newid):
+    """def node_changed_id(self, id, newid):
         node = self.nodes.pop(id)
         dispatcher_oldid = self.toDispatch.pop(id, [])
         dispatcher_newid = self.toDispatch.pop(newid, [])
@@ -222,7 +246,7 @@ class Ott:
         self.toDispatch[newid] = dispatcher_newid
         self.node_id[node.get_socket().fileno()] = newid
         self.nodes[newid] = node
-        # data = {'handler': self.handle_node_event, 'node': node}
+        # data = {'handler': self.handle_node_event, 'node': node}"""
 
     def add_toDispatch(self, id, message):
         node = self.nodes.get(id, None)
@@ -230,7 +254,6 @@ class Ott:
         dispatcher = self.toDispatch.get(id, [])
         #  if dispatcher:
         #    self.poll.modify(node.get_socket().fileno(), select.POLLOUT)
-        print(message)
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
 
@@ -254,21 +277,37 @@ class Ott:
         addrToId = {}
         for node in self.nodes.values():
             addrToId[node.get_addr()] = node.get_id()
+        if self.bootstrapper:
+            addrToId[self.addr] = self.id
         return addrToId
 
     # Adiciona uma stream a transmitir pelo nosso path
     def send_data(self, packet, addrs, path):
         addr_dic = self.get_addr_to_id()
-        path_id = list(map(lambda a: addr_dic.get(a, None), path))
+        path_id = self.convertPathToId(path)
+        logging.debug(f'path_id: {path_id}')
+        #time.sleep(5)
         if None not in path_id:
-            ids = list(map (lambda a: addr_dic[a], addrs))
+            ids = list(map(lambda a: addr_dic[a], addrs))
             if id is not None:
                 tracker = Tracker(path_id, destination=ids)
                 datapacket = DataMessage(id, tracker, packet)
-                print(tracker.get_path())
                 self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
         else:
             logging.debug('Client not found')
+
+
+
+    def convertPathToId(self, l):
+        tmp = []
+        addr_dic = self.get_addr_to_id()
+        for p in l:
+            if isinstance(p,list):
+                tmp.append(self.convertPathToId(p))
+            else:
+                tmp.append(addr_dic[p])
+        return tmp
+
 
     def send_ping(self, addr, path):
         logging.debug('Sending ping')
