@@ -172,12 +172,13 @@ class Ott:
 
     def nodeIsOffline(self, node):
         """
-        Callback para quando um no fica offline
+        Callback para quando um nodo fica offline
         :param node:
         :return:
         """
-        self.poll.unregister(node.get_socket().fileno())
-        self.node_id.pop(node.get_socket().fileno())
+        if node.get_socket().fileno() != -1:
+            self.poll.unregister(node.get_socket().fileno())
+            self.node_id.pop(node.get_socket().fileno())
 
     def handleRead(self, info):
         """

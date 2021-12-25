@@ -19,8 +19,8 @@ class Server:
         self.filename = "movie.Mjpeg"
         self.clientInfo['videoStream'] = VideoStream(self.filename)
         self.clientInfo['event'] = threading.Event()
-        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt)
-        # videoStram
+        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt).start()
+
 
         return
 
@@ -83,10 +83,13 @@ class Server:
     def sendThroughOtt(self):
 
         while True:
-            if self.noClients(): continue
+            if self.noClients():
+                continue
             if self.clientInfo['event'].isSet():
+                logging.debug("Event is set")
                 break
             address,paths = self.clientInfo.get('path',(None,[]))
+            logging.debug("Sending to %s", address)
             if address is None: continue
             #ott_manager.broadcast_message(address)
             #ott_manager.send_ping(address, path)

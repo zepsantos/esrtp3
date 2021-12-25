@@ -74,6 +74,7 @@ class Node():
         self.change_idcallback(tmp, newid)
 
     def send(self,data):
+        if self.status == nodeprotocol.NodeStatus.OFFLINE: return
         try:
             self.sock.send(data)
         except socket.error:
