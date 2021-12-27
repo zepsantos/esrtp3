@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from enum import Enum
 import pickle
 from message import Message, MessageType
@@ -7,7 +8,7 @@ from pingMessage import pingMessage
 from speersmessage import SPeersMessage
 from ACKMessage import ACKMessage
 from tracker import Tracker
-
+from copy import deepcopy
 
 # NODE que se liga ao bootstrap manda pedido ACK com id , boootstrap manda lista de vizinhos ( NODE(BOOTSTRAP)  = status(CONNECTING) , NODE(NODE) = status(ACK)
 # status(CONNECTING) -> RECEIVING ACK -> SEND ACK -> status(CONNECTED) -> status(IDLE) -> status(DISCONNECTED) (BOOTSTRAP)
@@ -26,6 +27,11 @@ class NodeStatus(Enum):
 
 
 def handle_RPeers(info):
+    """
+    Handle para o estado WPEERS , recebe os vizinhos e adiciona-os à lista de nodos do ott(inicia a ligação com eles) , mete o nodo que recebeu esta mensagem no estado FACK(FINAL ACK)
+    :param info: info = {ott:ott, node:node , message:message}
+    :return:
+    """
     message = info['message']
     node = info['node']
     ott = info['ott']
@@ -36,6 +42,13 @@ def handle_RPeers(info):
 
 
 def handle_SPeers(info):
+    """
+    Handle para o estado SPEERS, envia os peers ao nodo ,
+    se for o bootstrapper envia os nodos do ficheiro se não for não envia nada mas esta mensagem vai nos permitir confirmar o id do server ,
+     o status do nodo no final fica em WACK(Waiting for ACK)
+    :param info: {ott:ott, node:node}
+    :return: A mensagem a enviar já serializada
+    """
     node = info['node']
     ott = info['ott']
     if ott.bootstrapper:
@@ -49,8 +62,12 @@ def handle_SPeers(info):
     return tmp
 
 
-# RECEBE O ACK E METE O NODO EM NodeStatus.SPEERS e da set do id do node
 def handle_AckReceive(info):
+    """
+     # RECEBE O ACK E METE O NODO EM NodeStatus.SPEERS e atualiza o id do node
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     message = info['message']
     node = info['node']
     if message.get_type() != MessageType.ACK: return
@@ -59,6 +76,12 @@ def handle_AckReceive(info):
 
 
 def handle_AckSend(info):
+    """
+    Envia o Ack para o peer e fica a espera de receber os seus vizinhos
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return: mensagem já serializada
+    """
+
     ott = info['ott']
     node = info['node']
     id = ott.get_ott_id()
@@ -69,6 +92,11 @@ def handle_AckSend(info):
 
 
 def sendToAllNodes(info):
+    """
+    Envia para todos os nodos que o ott tem como vizinhos evitando enviar para os que já receberam
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     ott = info['ott']
     message = info['message']
     tracker = message.get_tracker()
@@ -78,7 +106,6 @@ def sendToAllNodes(info):
 
     maintracker.add_channels_visits(node_ids)
     for node_id in node_ids:
-        print(f'Sending message to {node_id}')
         if tracker.alreadyPassed(node_id):
             continue
         else:
@@ -87,30 +114,37 @@ def sendToAllNodes(info):
 
 
 def handle_connectedR(info):
+    """
+    Trata de ler as mensagens e coloca-las no dispatcher associado ao id a enviar (id este obtido atraves do tracker)
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     node = info['node']
     ott = info['ott']
-    message = info['message']
+    message: Message = info['message']
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
 
     logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
     if not reached_destination:
         tracker_nxt_channel = tracker.get_next_channel(ott.get_ott_id())
-        logging.debug(f' next channel: {tracker_nxt_channel}')
         if tracker_nxt_channel == -1:
             sendToAllNodes(info)
-        elif tracker_nxt_channel is list:
+        elif isinstance(tracker_nxt_channel, list):
             trackers = tracker.separateMulticast()
             for t in trackers:
-                message.set_tracker(t)
+                tmpmessage = deepcopy(message)
+                tmpmessage.set_tracker(t)
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
-                ott.add_toDispatch(tmp_nxt_channel, message)
+                print(f' tmp_nxt_channel: {tmp_nxt_channel}')
+                ott.add_toDispatch(tmp_nxt_channel, tmpmessage)
         else:
             ott.add_toDispatch(tracker_nxt_channel, message)
         # logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
 
     else:
         if message.get_type() == MessageType.DATA:
+            logging.debug(f'Received data from {message.get_sender_id()}')
             ott.dataCallback(message.get_rtppacket())
         elif message.get_type() == MessageType.PING:
             if (ott.bootstrapper):
@@ -125,6 +159,11 @@ def handle_connectedR(info):
 
 
 def handle_connectedW(info):
+    """
+    Trata de enviar as mensagens do Dispatcher
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return: Mensagem a enviar , serializada
+    """
     node = info['node']
     ott = info['ott']
     toTransmit = ott.get_toDispatch(node.get_id())
@@ -137,18 +176,28 @@ def handle_connectedW(info):
 
 
 def handle_AckConfirmation(info):
+    """
+    Confirma que ambas as partes sabem o id associado a cada
+    Se for o bootstrap desliga-se de todos os nodos a seguir ao handshake, exceto se forem seus vizinhos
+    :param info: info = {'node':nodo que recebeu a mensagem , 'message': mensagem ,'ott' : ott}
+    :return:
+    """
     node = info['node']
     ott = info['ott']
     message = info['message']
     if message.get_type() != MessageType.ACK: return
     if message.get_sender_id() == node.get_id():
         node.set_status(NodeStatus.CONNECTED)
-        if ott.is_bootstrapper() and ott.checkIfNodeIsNeighbour(node):
-            pass
-            # node.disconnect()
+        if ott.is_bootstrapper() and not ott.checkIfNodeIsNeighbour(node):
+            node.disconnect()
 
 
 def handle_AckConfirmationSend(info):
+    """
+    Envia a primeira parte da confirmação do Ack das duas partes
+    :param info:
+    :return: mensagem, ja serializada
+    """
     node = info['node']
     ott = info['ott']
     id = ott.get_ott_id()
@@ -159,6 +208,12 @@ def handle_AckConfirmationSend(info):
 
 
 def get_handler(status, read):
+    """
+    Retorna o handler tendo em conta o tipo de evento(ler ou escrever) e o status do peer
+    :param status:
+    :param read:
+    :return:
+    """
     if read:
         dic = {
             NodeStatus.WACK: handle_AckConfirmation,
@@ -178,6 +233,3 @@ def get_handler(status, read):
     # logging.debug(f'handler: {tmp}')
     return tmp
 
-
-def nofunc(info):
-    pass

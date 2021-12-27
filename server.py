@@ -19,8 +19,8 @@ class Server:
         self.filename = "movie.Mjpeg"
         self.clientInfo['videoStream'] = VideoStream(self.filename)
         self.clientInfo['event'] = threading.Event()
-        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt)
-        # videoStram
+        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt).start()
+
 
         return
 
@@ -46,6 +46,7 @@ class Server:
         """
         Initializes the server.
         """
+        self.clientInfo['videoStream'] = VideoStream(self.filename)
         socketServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         socketServer.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         socketServer.bind(('10.0.0.10', 20000))
@@ -56,20 +57,24 @@ class Server:
             clientsids = self.clientInfo.get('clients',[])
             if self.noClients():
                 self.clientInfo['event'].clear()
-                self.clientInfo['worker'].start()
             clientsids.append(address[0])
             self.clientInfo['clients'] = clientsids
-            self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
-            self.clientInfo['videoStream'] = VideoStream(self.filename)
+            threading.Thread(target=self.clientWorker,args=(clientSocket,address[0])).start()
 
-            try :
-                message = clientSocket.recv(1024).decode()
 
-            finally:
-                if self.noClients():
-                    self.clientInfo['event'].set()
-                clientSocket.close()
-                logging.info("Client disconnected from: %s", address)
+
+    def clientWorker(self,clientSocket, address):
+        self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
+
+        try:
+            message = clientSocket.recv(1024).decode()
+
+        finally:
+            if self.noClients():
+                self.clientInfo['event'].set()
+            self.clientInfo['clients'].remove(address)
+            logging.info("Client disconnected from: %s", address)
+            clientSocket.close()
 
 
     def noClients(self):
@@ -78,12 +83,14 @@ class Server:
     def sendThroughOtt(self):
 
         while True:
-            if self.noClients(): continue
+            if self.noClients():
+                continue
             if self.clientInfo['event'].isSet():
+                logging.debug("Event is set")
                 break
             address,paths = self.clientInfo.get('path',(None,[]))
+            logging.debug("Sending to %s", address)
             if address is None: continue
-            logging.debug(f'Sending to {address} through {paths}')
             #ott_manager.broadcast_message(address)
             #ott_manager.send_ping(address, path)
             data = self.clientInfo['videoStream'].nextFrame()
@@ -91,6 +98,8 @@ class Server:
                 frameNumber = self.clientInfo['videoStream'].frameNbr()
                 packet = self.makeRtp(data, frameNumber)
                 ott_manager.send_data(packet, self.clientInfo['clients'], paths)
+            else:
+                self.clientInfo['videoStream'] = VideoStream(self.filename)
             time.sleep(0.05)
 
 
@@ -107,7 +116,7 @@ class Server:
     def getPathsToGo(self,addrs):
         pathlist = paths.multicast_path_list("10.0.0.10", addrs)
         path = paths.multicast_path2(pathlist)
-        return path[1],path[1:]
+        return path[1],path
 
     def makeRtp(self, payload, frameNbr):
         """RTP-packetize the video data."""
