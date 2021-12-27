@@ -84,14 +84,14 @@ def convertPathToId(l):
 
 
 if __name__ == '__main__':
-    pathlist = paths.multicast_path_list("10.0.0.10", ["10.0.3.20", "10.0.4.20"])
+    pathlist = paths.multicast_path_list("10.0.0.10", ["10.0.2.2", "10.0.1.2"])
     path = paths.multicast_path2(pathlist)
-    #print(path)
+    print(path)
     tmp = convertPathToId(path)
     print(tmp)
     track = Tracker(tmp, destination=['3','5'])
     tracker_nxt_channel = track.get_next_channel('0')
     trackers = separateMulticast(track)
     for t in trackers:
-        print(t.get_path())
-        print(t.get_next_channel('0'))
+       print(t.get_path())
+       print(t.get_next_channel('0'))

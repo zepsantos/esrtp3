@@ -62,7 +62,6 @@ def handle_SPeers(info):
     return tmp
 
 
-
 def handle_AckReceive(info):
     """
      # RECEBE O ACK E METE O NODO EM NodeStatus.SPEERS e atualiza o id do node
@@ -126,15 +125,16 @@ def handle_connectedR(info):
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
 
-    #logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
+    # logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
     if not reached_destination:
         tracker_nxt_channel = tracker.get_next_channel(ott.get_ott_id())
         if tracker_nxt_channel == -1:
             sendToAllNodes(info)
-        elif isinstance(tracker_nxt_channel,list):
+        elif isinstance(tracker_nxt_channel, list):
             trackers = tracker.separateMulticast()
+            print(list(map(lambda ts : ts.get_path(),trackers)))
             for t in trackers:
-               # logging.debug(f'Sending message to {t.get_path()}')
+                logging.debug(f'Sending message to {t.get_path()}')
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
                 message.set_tracker(t)
                 ott.add_toDispatch(tmp_nxt_channel, message)
@@ -167,7 +167,7 @@ def handle_connectedW(info):
     ott = info['ott']
     toTransmit = ott.get_toDispatch(node.get_id())
     if toTransmit:
-        logging.debug(f'Received message to transmit {toTransmit}  to {node.get_id()}')
+        # logging.debug(f'Received message to transmit {toTransmit}  to {node.get_id()}')
         pickled = pickle.dumps(toTransmit)
         return pickled
     else:
@@ -188,7 +188,7 @@ def handle_AckConfirmation(info):
     if message.get_sender_id() == node.get_id():
         node.set_status(NodeStatus.CONNECTED)
         if ott.is_bootstrapper() and not ott.checkIfNodeIsNeighbour(node):
-           node.disconnect()
+            node.disconnect()
 
 
 def handle_AckConfirmationSend(info):
@@ -231,5 +231,3 @@ def get_handler(status, read):
     tmp = dic.get(status, None)
     # logging.debug(f'handler: {tmp}')
     return tmp
-
-

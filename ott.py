@@ -409,9 +409,10 @@ class Ott:
         path_id = self.convertPathToId(path)
         logging.debug(f'path_id: {path_id}')
         if None not in path_id:
-            ids = list(map(lambda a: addr_dic[a], addrs))
-            if id is not None:
+            ids = list(map(lambda a: addr_dic.get(a,None), addrs))
+            if None not in ids:
                 tracker = Tracker(path_id, destination=ids)
+                print(tracker.get_path())
                 datapacket = DataMessage(id, tracker, packet)
                 self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
         else:
@@ -431,7 +432,7 @@ class Ott:
             if isinstance(p,list):
                 tmp.append(self.convertPathToId(p))
             else:
-                tmp.append(addr_dic[p])
+                tmp.extend(addr_dic[p])
         return tmp
 
 

@@ -72,10 +72,9 @@ class Server:
             if self.noClients():
                 self.clientInfo['event'].set()
             self.clientInfo['clients'].remove(address)
-            logging.debug("Client disconnected from: %s", address)
+            logging.info("Client disconnected from: %s", address)
             clientSocket.close()
 
-            logging.info("Client disconnected from: %s", address)
 
     def noClients(self):
         return self.clientInfo.get('clients',[]) == []

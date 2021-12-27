@@ -79,7 +79,7 @@ class Node():
             self.sock.send(data)
         except socket.error:
             self.connect()
-            self.sock.send(data)
+            #self.sock.send(data)
 
 
     def receive(self):
