@@ -11,6 +11,7 @@ class Node():
         self.port = port
         self.offlinecallback = None
         self.change_idcallback = None
+        self.status = nodeprotocol.NodeStatus.OFFLINE
         if sock is None:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.connect()
@@ -62,8 +63,9 @@ class Node():
         return self.port
 
     def set_status(self, status):
+        tmp_status = self.status
         self.status = status
-        if self.status == nodeprotocol.NodeStatus.OFFLINE:
+        if self.status == nodeprotocol.NodeStatus.OFFLINE and tmp_status != nodeprotocol.NodeStatus.OFFLINE:
             if self.offlinecallback is not None:
                 self.offlinecallback(self)
         logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))

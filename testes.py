@@ -48,19 +48,19 @@ def trackerteste():
 def separateMulticast(s):
         tmp_jump_counts = 0
         trackers = []
-        for channel in s.get_path():
-            if isinstance(channel, list):
-                alreadyvisited = dropMulticastPath(s.get_path(), channel)
-                dst = 0
-                for l in channel:
-                    pathToTracker = alreadyvisited + l
-                    nt = s.__clone__()
-                    nt.set_destination([s.destination[dst]])
-                    nt.set_path(pathToTracker)
-                    trackers.append(nt)
-                    dst += 1
-            else:
-                tmp_jump_counts += 1
+        channel = s.get_path()[-1]
+        if isinstance(channel, list):
+            alreadyvisited = dropMulticastPath(s.get_path(), channel)
+            dst = 0
+            for l in channel:
+                pathToTracker = alreadyvisited + l
+                nt = s.__clone__()
+                nt.set_destination([s.destination[dst]])
+                nt.set_path(pathToTracker)
+                trackers.append(nt)
+                dst += 1
+        else:
+            tmp_jump_counts += 1
 
         return trackers
 
@@ -73,7 +73,7 @@ def dropMulticastPath(path, drop_list):
 
 def convertPathToId(l):
     tmp = []
-    addr_dic = {"10.0.0.10" : 0 , "10.0.0.1" : 1 , "10.0.1.2" : 2, "10.0.3.20":3, "10.0.2.2" : 4 , "10.0.4.20" : 5}
+    addr_dic = {"10.0.0.10" : "0000" , "10.0.0.1" : "1111" , "10.0.1.2" : "2222", "10.0.3.20":"33333", "10.0.2.2" : "44444" , "10.0.4.20" : "55555"}
     for p in l:
         if isinstance(p, list):
             tmp.append(convertPathToId(p))

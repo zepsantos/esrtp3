@@ -87,17 +87,20 @@ class Tracker:
         :return:
         """
         trackers = []
-        channel = self.channels[self.channels_jump_count]
+        channel = self.channels[-1]
         if isinstance(channel, list):
             alreadyvisited = dropMulticastPath(self.get_path(), channel)
             dst = 0
             for ls in channel:
                 pathToTracker = alreadyvisited + ls
                 nt = self.__clone__()
-                nt.set_destination([self.destination[dst]])
+                nt.set_destination([ls[-1]])
+                print("Path to tracker: {}".format(self.destination))
                 nt.set_path(pathToTracker)
+                nt.channels_jump_count -= 1
                 trackers.append(nt)
                 dst += 1
+        print(list(map(lambda x: x.get_path(), trackers)))
         return trackers
 
     def __clone__(self):
@@ -107,6 +110,7 @@ class Tracker:
         return t
 
     def set_destination(self, destination):
+        logging.debug("Setting destination to {}".format(destination))
         self.destination = destination
 
 

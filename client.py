@@ -25,8 +25,8 @@ def initClient():
     # Create a new client
     threading.Thread(target=askForStream).start()
     #root = Tk()
-   # app = ClienteGUI(root, ott_manager)
-  #  app.master.title("Cliente")
+    #app = ClienteGUI(root, ott_manager)
+    #app.master.title("Cliente")
     #root.mainloop()
 
 

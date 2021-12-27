@@ -145,7 +145,7 @@ class Ott:
         # if node is not self.neighbours
         id = self.node_id.get(key, None)
         node = self.nodes.get(id, None)
-        if node is None:
+        if node is None or node.get_status() == nodeprotocol.NodeStatus.OFFLINE:
             self.poll.unregister(key)
             return
 
@@ -230,8 +230,8 @@ class Ott:
         """
         try:
             while True:
-                time.sleep(0.01)
-                events = self.poll.poll(1)
+                sleep(0.01)
+                events = self.poll.poll(2)
                 # For each new event, dispatch to its handler
                 for key, event in events:
                     self.handler(key, event)
@@ -432,7 +432,7 @@ class Ott:
             if isinstance(p,list):
                 tmp.append(self.convertPathToId(p))
             else:
-                tmp.extend(addr_dic[p])
+                tmp.append(addr_dic[p])
         return tmp
 
 
