@@ -8,7 +8,7 @@ from pingMessage import pingMessage
 from speersmessage import SPeersMessage
 from ACKMessage import ACKMessage
 from tracker import Tracker
-
+from copy import deepcopy
 
 # NODE que se liga ao bootstrap manda pedido ACK com id , boootstrap manda lista de vizinhos ( NODE(BOOTSTRAP)  = status(CONNECTING) , NODE(NODE) = status(ACK)
 # status(CONNECTING) -> RECEIVING ACK -> SEND ACK -> status(CONNECTED) -> status(IDLE) -> status(DISCONNECTED) (BOOTSTRAP)
@@ -133,9 +133,11 @@ def handle_connectedR(info):
         elif isinstance(tracker_nxt_channel, list):
             trackers = tracker.separateMulticast()
             for t in trackers:
-                message.set_tracker(t)
+                tmpmessage = deepcopy(message)
+                tmpmessage.set_tracker(t)
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
-                ott.add_toDispatch(tmp_nxt_channel, message)
+                print(f' tmp_nxt_channel: {tmp_nxt_channel}')
+                ott.add_toDispatch(tmp_nxt_channel, tmpmessage)
         else:
             ott.add_toDispatch(tracker_nxt_channel, message)
         # logging.info(f' Transmiting to next peer with id: {nextdestination_id}')

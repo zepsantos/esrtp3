@@ -46,6 +46,7 @@ class Server:
         """
         Initializes the server.
         """
+        self.clientInfo['videoStream'] = VideoStream(self.filename)
         socketServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         socketServer.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         socketServer.bind(('10.0.0.10', 20000))
@@ -64,7 +65,7 @@ class Server:
 
     def clientWorker(self,clientSocket, address):
         self.clientInfo['path'] = self.getPathsToGo(self.clientInfo['clients'])
-        self.clientInfo['videoStream'] = VideoStream(self.filename)
+
         try:
             message = clientSocket.recv(1024).decode()
 
@@ -97,6 +98,8 @@ class Server:
                 frameNumber = self.clientInfo['videoStream'].frameNbr()
                 packet = self.makeRtp(data, frameNumber)
                 ott_manager.send_data(packet, self.clientInfo['clients'], paths)
+            else:
+                self.clientInfo['videoStream'] = VideoStream(self.filename)
             time.sleep(0.05)
 
 
