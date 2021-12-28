@@ -62,7 +62,7 @@ def BFS_SP(graph, start, goal):
 def initGraph():
     graph = {}
 
-    read_json('networkconfigotim.json', graph)
+    read_json('./topologias/networkconfigerro.json', graph)
     return graph
     
 
@@ -131,6 +131,7 @@ def addNodes(graph, nodes):
 
 def multicast_path_list(src,dests):
     graph = initGraph()
+
     pathlist =[]
     for dest in dests:
         p = shortest_path(src,dest, graph)
@@ -138,6 +139,16 @@ def multicast_path_list(src,dests):
     pathlist=sorted(pathlist, key=len)
     return pathlist
 
+
+def multicast_path_list_removeOffline(src, dests,nodes_to_remove):
+    graph = initGraph()
+    removeNodes(graph,nodes_to_remove)
+    pathlist = []
+    for dest in dests:
+        p = shortest_path(src, dest, graph)
+        pathlist.append(p)
+    pathlist = sorted(pathlist, key=len)
+    return pathlist
 
 def Extract(lst,index):
     return [item[index] for item in lst]

@@ -291,7 +291,7 @@ class Ott:
         Lê a config da network para no futuro enviar aos peers
         :return:
         """
-        with open('networkconfigotim.json', 'r') as f:
+        with open('./topologias/networkconfigerro.json', 'r') as f:
             self.network_config = json.load(f)  # load networkconfig.json
 
     def check_id(self, id):
@@ -462,7 +462,7 @@ class Ott:
             if isinstance(p,list):
                 tmp.append(self.convertPathToId(p))
             else:
-                tmp.append(addr_dic[p])
+                tmp.append(addr_dic.get(p,None))
         return tmp
 
 
