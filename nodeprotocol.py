@@ -137,9 +137,12 @@ def handle_connectedR(info):
                 tmpmessage.set_tracker(t)
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
                 print(f' tmp_nxt_channel: {tmp_nxt_channel}')
-                ott.add_toDispatch(tmp_nxt_channel, tmpmessage)
+                if not ott.add_toDispatch(tmp_nxt_channel, tmpmessage):
+                    info['message'] = tmpmessage
+                    sendToAllNodes(info)
         else:
-            ott.add_toDispatch(tracker_nxt_channel, message)
+            if not ott.add_toDispatch(tracker_nxt_channel, message):
+                sendToAllNodes(info)
         # logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
 
     else:
@@ -156,6 +159,9 @@ def handle_connectedR(info):
                 # logging.debug(f'Path after receiving ping from bootstrap: {tracker.get_path()}')
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
+        elif message.get_type() == MessageType.GOINGOFFLINE:
+            logging.debug(f'Received going offline from {message.get_sender_id()}')
+            ott.set_node_offline(message.get_sender_id())
 
 
 def handle_connectedW(info):

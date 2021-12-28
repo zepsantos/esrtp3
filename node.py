@@ -50,7 +50,6 @@ class Node():
         self.set_status(nodeprotocol.NodeStatus.OFFLINE)
 
     def reconnect(self):
-        if self.get_status() == nodeprotocol.NodeStatus.OFFLINE:
             self.connect()
 
     def get_id(self):
@@ -95,8 +94,19 @@ class Node():
             self.reconnect()
             return None
 
+    def close(self):
+        self.sock.close()
+        self.set_status(nodeprotocol.NodeStatus.OFFLINE)
+
     def received_connection(self, connnode):
         self.addr = connnode.get_addr()
         self.port = connnode.get_port()
         self.sock = connnode.get_socket()
         self.set_status(nodeprotocol.NodeStatus.ACKRECEIVING)
+
+
+    def isOffline(self):
+        return self.status == nodeprotocol.NodeStatus.OFFLINE
+
+    def setOffline(self):
+        self.set_status(nodeprotocol.NodeStatus.OFFLINE)
