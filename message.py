@@ -7,16 +7,11 @@ from enum import Enum
 
 class MessageType(Enum):
     ACK = 0
-    NACK = 1
-    DATA = 2
-    REQUEST = 3
-    RESPONSE = 4
-    ERROR = 5
-    UNKNOWN = 6
-    MESSAGE = 7
-    PING = 8
-    SPEERS = 9
-    RSTREAM = 10
+    DATA = 1
+    MESSAGE = 2
+    PING = 3
+    SPEERS = 4
+    GOINGOFFLINE = 5
 
 
 

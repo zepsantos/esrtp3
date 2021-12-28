@@ -17,9 +17,8 @@ import common
 from time import sleep
 from netifaces import interfaces, ifaddresses, AF_INET
 from pingMessage import pingMessage
-from requestStream import RequestStreamMessage
 from tracker import Tracker
-
+from goingOffline import GoingOfflineMessage
 HOST = '0.0.0.0'
 PORT = 7000
 num_of_threads = 2
@@ -236,7 +235,22 @@ class Ott:
                 for key, event in events:
                     self.handler(key, event)
         finally:
-            pass  # close all sockets
+              self.warnImGoingOffline()
+              self.poll.unregister(self.main_socket.fileno())
+              self.main_socket.close()
+
+
+    def warnImGoingOffline(self):
+        """
+        Envia um warning para todos os nodos da rede
+        :return:
+        """
+        for node in self.nodes.values():
+            if node.get_status() == nodeprotocol.NodeStatus.CONNECTED:
+                go = GoingOfflineMessage(self.get_ott_id(), tracker=Tracker([self.get_ott_id(), node.get_id()], destination=[node.get_id()]))
+                sndgo = pickle.dumps(go)
+                node.send(sndgo)
+                node.close()
 
     def handler(self, key, event):
         """
@@ -348,13 +362,29 @@ class Ott:
          Adiciona ao dispatcher a entrada {id:Lista de mensagens a enviar para o nodo} sendo que o dispatcher tem um formato {id:[mensagens]}
         """
         node = self.nodes.get(id, None)
-        if node is None: return
+        if node is None:
+            return False
+        elif node.isOffline():
+            node.reconnect()
+            if node.isOffline():
+                return False
         dispatcher = self.toDispatch.get(id, [])
         #  if dispatcher:
         #    self.poll.modify(node.get_socket().fileno(), select.POLLOUT)
         dispatcher.append(message)
         self.toDispatch[id] = dispatcher
+        return True
 
+    def set_node_offline(self,node_id):
+        """
+        Set o nodo offline
+        :param node_id:
+        :return:
+        """
+        node = self.nodes.get(node_id, None)
+        if node is None:
+            return
+        node.setOffline()
 
 
     def add_toDispatchByAddr(self, addr, message):
