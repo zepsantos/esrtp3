@@ -291,7 +291,7 @@ class Ott:
         Lê a config da network para no futuro enviar aos peers
         :return:
         """
-        with open('./topologias/networkconfigerro.json', 'r') as f:
+        with open(common.pathToNetworkConfig, 'r') as f:
             self.network_config = json.load(f)  # load networkconfig.json
 
     def check_id(self, id):

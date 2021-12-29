@@ -1,6 +1,8 @@
 import json
 from os import read
 
+import common
+
 
 def read_json(jsonfile,graph):
     f= open(jsonfile, 'r')
@@ -62,7 +64,7 @@ def BFS_SP(graph, start, goal):
 def initGraph():
     graph = {}
 
-    read_json('./topologias/networkconfigerro.json', graph)
+    read_json(common.pathToNetworkConfig, graph)
     return graph
     
 
