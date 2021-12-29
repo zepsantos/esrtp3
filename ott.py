@@ -520,7 +520,7 @@ class Ott:
 
 
 def initOtt():
-    logging.basicConfig(level=logging.DEBUG,
+    logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     asd = {}
     if len(sys.argv) > 1:
