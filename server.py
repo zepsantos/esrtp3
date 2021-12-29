@@ -19,15 +19,13 @@ class Server:
         self.filename = "movie.Mjpeg"
         self.clientInfo['videoStream'] = VideoStream(self.filename)
         self.clientInfo['event'] = threading.Event()
-        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt).start()
-
+        self.clientInfo['worker'] = threading.Thread(target=self.sendThroughOtt)
+        self.clientInfo['pingThread'] = threading.Thread(target=self.sendPingThroughOtt)
 
         return
 
 
     def main(self):
-        #pathlist=paths.multicast_path_list("10.0.0.10",["10.0.4.20","10.0.3.20"])
-        #print( paths.multicast_path2(pathlist))
         self.initOtt()
         self.initServer()
 
@@ -40,6 +38,8 @@ class Server:
         bootstrapper_info = {}
         ott_manager = Ott(bootstrapper_info)
         threading.Thread(target=ott_manager.serve_forever).start()
+        self.clientInfo['worker'].start()
+        self.clientInfo['pingThread'].start()
         return
 
     def initServer(self):
@@ -88,24 +88,48 @@ class Server:
             if self.clientInfo['event'].isSet():
                 logging.debug("Event is set")
                 break
-            address,paths = self.clientInfo.get('path',(None,[]))
-            logging.debug("Sending to %s", address)
-            if address is None: continue
-            #ott_manager.broadcast_message(address)
-            #ott_manager.send_ping(address, path)
-            data = self.clientInfo['videoStream'].nextFrame()
-            if data:
-                frameNumber = self.clientInfo['videoStream'].frameNbr()
-                packet = self.makeRtp(data, frameNumber)
-                ott_manager.send_data(packet, self.clientInfo['clients'], paths)
-            else:
-                self.clientInfo['videoStream'] = VideoStream(self.filename)
+            self.sendStream()
             time.sleep(0.05)
 
 
-    def sendPingToClient(self,address):
-        path = self.getPathToGo(address)
-        ott_manager.send_ping(address, path)
+    def sendPingThroughOtt(self):
+        while True:
+            time.sleep(1)
+            if self.noClients():
+                continue
+            if self.clientInfo['event'].isSet():
+                logging.debug("Event is set")
+                break
+            address, paths = self.clientInfo.get('path', (None, []))
+            if address is None: return
+            ott_manager.send_ping(self.clientInfo['clients'], paths)
+
+
+
+    def sendStream(self):
+        address, paths = self.clientInfo.get('path', (None, []))
+        # logging.debug("Sending to %s", address)
+        if address is None: return
+        # ott_manager.broadcast_message(address)
+
+        data = self.clientInfo['videoStream'].nextFrame()
+        if data:
+            frameNumber = self.clientInfo['videoStream'].frameNbr()
+            packet = self.makeRtp(data, frameNumber)
+            ott_manager.send_data(packet, self.clientInfo['clients'], paths)
+        else:
+            self.clientInfo['videoStream'] = VideoStream(self.filename)
+
+
+
+    def sendPingToAllNodes(self):
+        addrlist = ott_manager.get_online_nodes_addr()
+        for a in addrlist:
+            address, path = self.getPathsToGo(a)
+            if address is None : return
+            logging.info(f'paths to go {path}')
+            ott_manager.send_ping(addrlist, path)
+
 
 
     def getPathToGo(self,addr):
@@ -114,8 +138,17 @@ class Server:
         return path[1:]
 
     def getPathsToGo(self,addrs):
-        pathlist = paths.multicast_path_list("10.0.0.10", addrs)
+        """
+        Retorna o primeiro elemento para saber se já pode enviar a mensagem ou nao
+        :param addrs:
+        :return:
+        """
+        offlineNodes = ott_manager.get_offline_nodes_addr()
+        logging.info(f'offline nodes {offlineNodes}')
+        pathlist = paths.multicast_path_list_removeOffline("10.0.0.10", addrs,offlineNodes)
+
         path = paths.multicast_path2(pathlist)
+        logging.info("Paths to go: %s", path)
         return path[1],path
 
     def makeRtp(self, payload, frameNbr):
@@ -137,7 +170,7 @@ class Server:
         return rtpPacket.getPacket()
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.NOTSET,
+    logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     server = Server()
     server.main()

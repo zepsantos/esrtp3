@@ -45,7 +45,7 @@ def askForStream():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.NOTSET,
+    logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     initOtt()
     initClient()

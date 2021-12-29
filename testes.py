@@ -84,7 +84,7 @@ def convertPathToId(l):
 
 
 if __name__ == '__main__':
-    pathlist = paths.multicast_path_list("10.0.0.10", ["10.0.2.2", "10.0.1.2"])
+    pathlist = paths.multicast_path_list("10.0.0.10", ["10.0.1.2"])
     path = paths.multicast_path2(pathlist)
     print(path)
     tmp = convertPathToId(path)

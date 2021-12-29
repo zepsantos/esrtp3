@@ -64,7 +64,6 @@ class Ott:
         :return:
         """
         conn, addr = self.main_socket.accept()
-        logging.info(f'Accepted connection from {addr}')
         self.add_node(Node(addr[0], addr[1], conn))
 
     def add_node(self, nodeconn):
@@ -73,13 +72,6 @@ class Ott:
         :param nodeconn:
         :return:
         """
-        """status, ournode = self.check_node_address(nodeconn.get_addr())
-        if status:
-            self.poll.unregister(nodeconn.get_socket())
-            ournode.received_connection(nodeconn)
-        else:
-            ournode = nodeconn
-            self.nodes[ournode.get_id()] = ournode"""
         self.nodes[nodeconn.get_id()] = nodeconn
         nodeconn.set_change_idcallback(self.node_changed_id)
         nodeconn.set_nodeofflinecallback(self.nodeIsOffline)
@@ -142,23 +134,27 @@ class Ott:
         :return:
         """
         # if node is not self.neighbours
-        id = self.node_id.get(key, None)
-        node = self.nodes.get(id, None)
-        if node is None or node.get_status() == nodeprotocol.NodeStatus.OFFLINE:
-            self.poll.unregister(key)
+        try:
+            id = self.node_id.get(key, None)
+            node = self.nodes.get(id, None)
+            if node is None or node.get_status() == nodeprotocol.NodeStatus.OFFLINE:
+                self.poll.unregister(key)
+                return
+
+            if event & select.POLLIN:
+                message = node.receive()
+                self.executor.submit(self.handleRead, (node, message))
+            if event & select.POLLOUT:
+                self.executor.submit(self.handleWrite, node)
+
+            if event & select.POLLHUP:
+                node = self.getNodeByfileno(key)
+                self.poll.unregister(key)
+                if node is not None:
+                    node.get_socket().close()
+                del self.node_id[key]
+        except Exception as e:
             return
-
-        if event & select.POLLIN:
-            message = node.receive()
-            self.executor.submit(self.handleRead, (node, message))
-        if event & select.POLLOUT:
-            self.executor.submit(self.handleWrite, node)
-
-        if event & select.POLLHUP:
-            node = self.getNodeByfileno(key)
-            self.poll.unregister(key)
-            node.get_socket().close()
-            del self.node_id[key]
 
 
     def getNodeByfileno(self, fileno):
@@ -167,7 +163,8 @@ class Ott:
         :param fileno:
         :return:
         """
-        return self.nodes[self.node_id[fileno]]
+        nodeid = self.node_id.get(fileno, None)
+        return self.nodes.get(nodeid, None)
 
     def nodeIsOffline(self, node):
         """
@@ -178,6 +175,7 @@ class Ott:
         if node.get_socket().fileno() != -1:
             self.poll.unregister(node.get_socket().fileno())
             self.node_id.pop(node.get_socket().fileno())
+            node.close_socket()
 
     def handleRead(self, info):
         """
@@ -230,7 +228,7 @@ class Ott:
         try:
             while True:
                 sleep(0.01)
-                events = self.poll.poll(2)
+                events = self.poll.poll(1)
                 # For each new event, dispatch to its handler
                 for key, event in events:
                     self.handler(key, event)
@@ -274,6 +272,20 @@ class Ott:
         port = bootstrapper_info['port']
         self.connect_to_node(addr, port)
 
+    def get_offline_nodes_addr(self):
+        """
+        Retorna os nodos que estão online
+        :return:
+        """
+        return [node.get_addr() for node in self.nodes.values() if node.get_status() == nodeprotocol.NodeStatus.OFFLINE]
+
+    def get_online_nodes_addr(self):
+        """
+        Retorna os nodos que estão online
+        :return:
+        """
+        return [node.get_addr() for node in self.nodes.values() if node.get_status() == nodeprotocol.NodeStatus.CONNECTED or node.get_status() == nodeprotocol.NodeStatus.NOTCONNECTED]
+
     def check_node_address(self, node_addr):
         """
             # Checks if we already have a connection with the node by his address
@@ -292,7 +304,7 @@ class Ott:
         :return:
         """
         with open(common.pathToNetworkConfig, 'r') as f:
-            self.network_config = json.load(f)  # load networkconfig.json
+            self.network_config = json.load(f)
 
     def check_id(self, id):
         """
@@ -347,15 +359,7 @@ class Ott:
             res.append(tmp[neig])
         return res
 
-    """def node_changed_id(self, id, newid):
-        node = self.nodes.pop(id)
-        dispatcher_oldid = self.toDispatch.pop(id, [])
-        dispatcher_newid = self.toDispatch.pop(newid, [])
-        dispatcher_newid.extend(dispatcher_oldid)
-        self.toDispatch[newid] = dispatcher_newid
-        self.node_id[node.get_socket().fileno()] = newid
-        self.nodes[newid] = node
-        # data = {'handler': self.handle_node_event, 'node': node}"""
+
 
     def add_toDispatch(self, id, message):
         """
@@ -442,12 +446,22 @@ class Ott:
             ids = list(map(lambda a: addr_dic.get(a,None), addrs))
             if None not in ids:
                 tracker = Tracker(path_id, destination=ids)
-                print(tracker.get_path())
                 datapacket = DataMessage(id, tracker, packet)
                 self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
         else:
             logging.debug('Client not found')
 
+    def send_ping(self,addrs ,path):
+        addr_dic = self.get_addr_to_id()
+        path_id = self.convertPathToId(path)
+        logging.debug(f'path_id: {path_id}')
+        if None not in path_id:
+            ids = list(map(lambda a: addr_dic.get(a,None), addrs))
+            if None not in ids:
+                tracker = Tracker(path_id, destination=ids)
+                ping = pingMessage(self.get_ott_id(), tracker)
+
+                self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), ping)
 
 
     def convertPathToId(self, l):
@@ -466,25 +480,6 @@ class Ott:
         return tmp
 
 
-    def send_ping(self, addr, path):
-        """
-        Função usada para o server enviar um ping ao addr que quiser pelo path que fornece
-        :param addr: str
-        :param path: [addr]
-        :return:
-        """
-        logging.debug('Sending ping')
-        addr_dic = self.get_addr_to_id()
-        path_id = list(map(lambda a: addr_dic.get(a, None), path))
-        if None not in path_id:
-            id = addr_dic.get(addr, None)
-            if id is not None:
-                tracker = Tracker(path_id, destination=id)
-                datapacket = pingMessage(id, tracker)
-
-                self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), datapacket)
-        else:
-            logging.debug('Client not found')
 
     def broadcast_message(self, addr):
         """
@@ -501,6 +496,7 @@ class Ott:
                 datapacket = pingMessage(id, tracker)
                 info['message'] = datapacket
                 nodeprotocol.sendToAllNodes(info)
+
 
     def setDataCallback(self, callback):
         """
@@ -523,7 +519,7 @@ class Ott:
 
 
 def initOtt():
-    logging.basicConfig(level=logging.NOTSET,
+    logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     asd = {}
     if len(sys.argv) > 1:

@@ -95,12 +95,11 @@ class Tracker:
                 pathToTracker = alreadyvisited + ls
                 nt = self.__clone__()
                 nt.set_destination([ls[-1]])
-                print("Path to tracker: {}".format(self.destination))
                 nt.set_path(pathToTracker)
                 nt.channels_jump_count -= 1
                 trackers.append(nt)
                 dst += 1
-        print(list(map(lambda x: x.get_path(), trackers)))
+
         return trackers
 
     def __clone__(self):

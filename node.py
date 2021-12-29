@@ -46,11 +46,13 @@ class Node():
             self.set_status(nodeprotocol.NodeStatus.OFFLINE)
 
     def disconnect(self):
-        self.sock.close()
-        self.set_status(nodeprotocol.NodeStatus.OFFLINE)
+        self.set_status(nodeprotocol.NodeStatus.NOTCONNECTED)
+        if self.offlinecallback != None:
+            self.offlinecallback(self)
+
 
     def reconnect(self):
-            self.connect()
+        self.connect()
 
     def get_id(self):
         return self.id
@@ -67,6 +69,11 @@ class Node():
         if self.status == nodeprotocol.NodeStatus.OFFLINE and tmp_status != nodeprotocol.NodeStatus.OFFLINE:
             if self.offlinecallback is not None:
                 self.offlinecallback(self)
+                logging.info("Node %s:%d is offline" % (self.addr, self.port))
+        elif self.status == nodeprotocol.NodeStatus.CONNECTED:
+            logging.info("Node %s:%d is connected" % (self.addr, self.port))
+        elif self.status == nodeprotocol.NodeStatus.NOTCONNECTED:
+            logging.info("Node %s:%d is not connected" % (self.addr, self.port))
         logging.debug("Node %s:%d status changed to %s" % (self.addr, self.port, status))
 
     def set_id(self, newid):
@@ -95,7 +102,6 @@ class Node():
             return None
 
     def close(self):
-        self.sock.close()
         self.set_status(nodeprotocol.NodeStatus.OFFLINE)
 
     def received_connection(self, connnode):
@@ -110,3 +116,6 @@ class Node():
 
     def setOffline(self):
         self.set_status(nodeprotocol.NodeStatus.OFFLINE)
+
+    def close_socket(self):
+        self.sock.close()

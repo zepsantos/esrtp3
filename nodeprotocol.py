@@ -24,6 +24,7 @@ class NodeStatus(Enum):
     OFFLINE = 6  # Offline
     FACK = 7  # Final ACK
     WACK = 8  # Waiting final ACK
+    NOTCONNECTED = 9  # Not Connected
 
 
 def handle_RPeers(info):
@@ -124,10 +125,10 @@ def handle_connectedR(info):
     message: Message = info['message']
     tracker = message.get_tracker()
     reached_destination = tracker.reach_destination(ott.get_ott_id())
-
-    logging.debug(f' reach_destination: {reached_destination} destination: {tracker.get_destination()}')
     if not reached_destination:
         tracker_nxt_channel = tracker.get_next_channel(ott.get_ott_id())
+        if message.get_type() == MessageType.PING:
+            logging.info(f'Received PING from {node.get_addr()} sending to {tracker_nxt_channel}')
         if tracker_nxt_channel == -1:
             sendToAllNodes(info)
         elif isinstance(tracker_nxt_channel, list):
@@ -136,14 +137,13 @@ def handle_connectedR(info):
                 tmpmessage = deepcopy(message)
                 tmpmessage.set_tracker(t)
                 tmp_nxt_channel = t.get_next_channel(ott.get_ott_id())
-                print(f' tmp_nxt_channel: {tmp_nxt_channel}')
                 if not ott.add_toDispatch(tmp_nxt_channel, tmpmessage):
                     info['message'] = tmpmessage
                     sendToAllNodes(info)
         else:
             if not ott.add_toDispatch(tracker_nxt_channel, message):
                 sendToAllNodes(info)
-        # logging.info(f' Transmiting to next peer with id: {nextdestination_id}')
+
 
     else:
         if message.get_type() == MessageType.DATA:
@@ -160,7 +160,7 @@ def handle_connectedR(info):
                 nextdestination_id = tracker.get_next_channel()
                 ott.add_toDispatch(nextdestination_id, message)
         elif message.get_type() == MessageType.GOINGOFFLINE:
-            logging.debug(f'Received going offline from {message.get_sender_id()}')
+            logging.info(f'Received going offline from {message.get_sender_id()}')
             ott.set_node_offline(message.get_sender_id())
 
 

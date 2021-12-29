@@ -86,6 +86,9 @@ class ClienteGUI:
 
         currFrameNbr = rtpPacket.seqNum()
 
+        if currFrameNbr < 5 :
+            self.frameNbr = currFrameNbr
+
         if currFrameNbr > self.frameNbr:  # Discard the late packet
             self.frameNbr = currFrameNbr
             self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
