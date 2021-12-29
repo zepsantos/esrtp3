@@ -143,9 +143,10 @@ class Server:
         :param addrs:
         :return:
         """
-        offlineNodes = ott_manager.get_offline_nodes_addr()
-        logging.info(f'offline nodes {offlineNodes}')
-        pathlist = paths.multicast_path_list_removeOffline("10.0.0.10", addrs,offlineNodes)
+        onlineNodes = ott_manager.get_online_nodes_addr()
+        onlineNodes.extend(addrs)
+        logging.debug(f'online nodes {onlineNodes}')
+        pathlist = paths.multicast_path_list_addOnline("10.0.0.10", addrs,onlineNodes)
 
         path = paths.multicast_path2(pathlist)
         logging.info("Paths to go: %s", path)
@@ -170,7 +171,7 @@ class Server:
         return rtpPacket.getPacket()
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     server = Server()
     server.main()

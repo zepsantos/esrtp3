@@ -55,6 +55,7 @@ def handle_SPeers(info):
     if ott.bootstrapper:
         noderepr = ott.get_network_config()[node.get_addr()]
         neighbors = noderepr['neighbors']
+
         speersmessage = SPeersMessage(ott.get_ott_id(), neighbors)
     else:
         speersmessage = SPeersMessage(ott.get_ott_id(), [])

@@ -4,7 +4,7 @@ import random
 from tracker import Tracker
 
 
-pathToNetworkConfig = "networkconfigotim.json"
+pathToNetworkConfig = "./topologias/bignetwork.json"
 
 def generate_id(addr, port):
     """Generates a unique ID for each node."""

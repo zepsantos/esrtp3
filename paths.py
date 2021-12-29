@@ -1,4 +1,5 @@
 import json
+import logging
 from os import read
 
 import common
@@ -94,21 +95,18 @@ def removeNodes(graph, nodes):
 # graph : dictionary
 # nodes : List<String>
 def addNodes(graph, nodes):
+    f = open(common.pathToNetworkConfig, 'r')
+    network_config = json.load(f)
     for node in nodes:
-        f = open('networkconfigotim.json', 'r')
-        network_config = json.load(f)
-        
         for i in network_config:
-
-            if i == node :
+            if i == node:
                 graph[i] = []
 
                 for nlist in network_config[i].values():
-                    graph[i].append(nlist[0])
-                    
-                    if nlist[0] in graph:
-                        if node not in graph[nlist[0]]:
-                            graph[nlist[0]].append(node)
+
+                    for nnlist in nlist:
+                        if nnlist in graph:
+                            graph[i].append(nnlist)
             
             else:
                 for nlist in network_config[i].values():
@@ -117,7 +115,19 @@ def addNodes(graph, nodes):
                             if node not in graph[i]:
                                 graph[i].append(node)
 
-              
+def addNodesn (graph , nodes):
+    f = open(common.pathToNetworkConfig, 'r')
+    network_config = json.load(f)
+    for node in nodes:
+        ncl = network_config.get(node,{}).values()
+        for n in ncl:
+            if n in nodes:
+                graph.get(node,[]).append(n)
+
+    print(graph)
+
+
+
 
         
 
@@ -150,6 +160,18 @@ def multicast_path_list_removeOffline(src, dests,nodes_to_remove):
     for dest in dests:
         p = shortest_path(src, dest, graph)
         pathlist.append(p)
+    pathlist = sorted(pathlist, key=len)
+    return pathlist
+
+def multicast_path_list_addOnline(src, dests,nodes_online):
+    graph = {}
+    addNodes(graph,nodes_online)
+    logging.info(f'graph: {graph}')
+    pathlist = []
+    for dest in dests:
+        p = shortest_path(src, dest, graph)
+        pathlist.append(p)
+    logging.info("pathlist: %s", pathlist)
     pathlist = sorted(pathlist, key=len)
     return pathlist
 

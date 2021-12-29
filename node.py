@@ -1,5 +1,7 @@
 import logging
 import socket
+from sre_constants import IN
+
 import nodeprotocol
 import common
 

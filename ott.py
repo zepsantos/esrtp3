@@ -19,6 +19,7 @@ from netifaces import interfaces, ifaddresses, AF_INET
 from pingMessage import pingMessage
 from tracker import Tracker
 from goingOffline import GoingOfflineMessage
+
 HOST = '0.0.0.0'
 PORT = 7000
 num_of_threads = 2
@@ -39,7 +40,8 @@ class Ott:
         self.poll = select.poll()
         self.poll.register(self.main_socket.fileno(), select.POLLIN)
         self.bootstrapper = False
-
+        self.neighbours = []
+        self.toDispatch = {}
         self.id = common.generate_id(HOST, PORT)
         self.executor = ThreadPoolExecutor(num_of_threads)
         logging.info(f'Ott id: {self.id}')
@@ -47,10 +49,9 @@ class Ott:
             self.bootstrapper = True
             self.network_config = {}
             self.load_network_config()
+            self.init_bootstrapper_neighbours()
         else:
             self.connect_to_bootstrapper(bootstrapper_info)
-        self.neighbours = []
-        self.toDispatch = {}
 
     def get_node_ip(self):
         interf = interfaces()
@@ -72,11 +73,16 @@ class Ott:
         :param nodeconn:
         :return:
         """
-        self.nodes[nodeconn.get_id()] = nodeconn
-        nodeconn.set_change_idcallback(self.node_changed_id)
-        nodeconn.set_nodeofflinecallback(self.nodeIsOffline)
-        self.node_id[nodeconn.get_socket().fileno()] = nodeconn.get_id()
-        self.poll.register(nodeconn.get_socket().fileno(), select.POLLIN | select.POLLOUT)
+        status, node = self.check_node_address(nodeconn.get_addr())
+        if status:
+            node.received_connection(nodeconn)
+        else:
+            node = nodeconn
+        self.nodes[node.get_id()] = node
+        node.set_change_idcallback(self.node_changed_id)
+        node.set_nodeofflinecallback(self.nodeIsOffline)
+        self.node_id[node.get_socket().fileno()] = node.get_id()
+        self.poll.register(node.get_socket().fileno(), select.POLLIN | select.POLLOUT)
 
     def node_changed_id(self, id, newid):
         """
@@ -86,14 +92,15 @@ class Ott:
         :return:
         """
         node = None
-        if newid in self.nodes.keys(): #No caso de um node que se conecta e ja esta na rede ja o conhecemos
-            node = self.nodes[newid] # O que nós já temos
-            newconnnode = self.nodes.pop(id) # O do node que está a tentar se conectar
-            self.poll.unregister(node.get_socket().fileno()) # Tiramos do selector o nodo com a ligaçao antiga
-            node.set_socket(newconnnode.get_socket()) # Atualizamos o socket do node que já temos
-            node.set_addr(newconnnode.get_addr()) # Atualizamos o endereço no caso do endereço do nodo estar a usar uma interface diferente para se conectar
-            node.set_change_idcallback(None) # Se nao fizemos isto entravamos num loop a seguir com o node.set_id
-            node.set_id(newid) # Mudamos o id do nodo para o id que recebemos
+        if newid in self.nodes.keys():  # No caso de um node que se conecta e ja esta na rede ja o conhecemos
+            node = self.nodes[newid]  # O que nós já temos
+            newconnnode = self.nodes.pop(id)  # O do node que está a tentar se conectar
+            self.poll.unregister(node.get_socket().fileno())  # Tiramos do selector o nodo com a ligaçao antiga
+            node.set_socket(newconnnode.get_socket())  # Atualizamos o socket do node que já temos
+            node.set_addr(
+                newconnnode.get_addr())  # Atualizamos o endereço no caso do endereço do nodo estar a usar uma interface diferente para se conectar
+            node.set_change_idcallback(None)  # Se nao fizemos isto entravamos num loop a seguir com o node.set_id
+            node.set_id(newid)  # Mudamos o id do nodo para o id que recebemos
             node.set_change_idcallback(self.node_changed_id)
             self.remove_node(newconnnode)
         else:
@@ -104,8 +111,6 @@ class Ott:
         self.toDispatch[newid] = dispatcher_newid
         self.node_id[node.get_socket().fileno()] = newid
         self.nodes[newid] = node
-
-
 
     def connect_to_node(self, addr, port):
         """
@@ -124,7 +129,6 @@ class Ott:
 
     def get_nodes(self):
         return self.nodes.values()
-
 
     def handle_node_event(self, key, event):
         """
@@ -155,7 +159,6 @@ class Ott:
                 del self.node_id[key]
         except Exception as e:
             return
-
 
     def getNodeByfileno(self, fileno):
         """
@@ -233,10 +236,9 @@ class Ott:
                 for key, event in events:
                     self.handler(key, event)
         finally:
-              self.warnImGoingOffline()
-              self.poll.unregister(self.main_socket.fileno())
-              self.main_socket.close()
-
+            self.warnImGoingOffline()
+            self.poll.unregister(self.main_socket.fileno())
+            self.main_socket.close()
 
     def warnImGoingOffline(self):
         """
@@ -245,7 +247,8 @@ class Ott:
         """
         for node in self.nodes.values():
             if node.get_status() == nodeprotocol.NodeStatus.CONNECTED:
-                go = GoingOfflineMessage(self.get_ott_id(), tracker=Tracker([self.get_ott_id(), node.get_id()], destination=[node.get_id()]))
+                go = GoingOfflineMessage(self.get_ott_id(), tracker=Tracker([self.get_ott_id(), node.get_id()],
+                                                                            destination=[node.get_id()]))
                 sndgo = pickle.dumps(go)
                 node.send(sndgo)
                 node.close()
@@ -284,7 +287,10 @@ class Ott:
         Retorna os nodos que estão online
         :return:
         """
-        return [node.get_addr() for node in self.nodes.values() if node.get_status() == nodeprotocol.NodeStatus.CONNECTED or node.get_status() == nodeprotocol.NodeStatus.NOTCONNECTED]
+        tmp = [node.get_addr() for node in self.nodes.values() if
+               node.get_status() == nodeprotocol.NodeStatus.CONNECTED or node.get_status() == nodeprotocol.NodeStatus.NOTCONNECTED]
+        tmp.append(self.addr)
+        return tmp
 
     def check_node_address(self, node_addr):
         """
@@ -339,14 +345,16 @@ class Ott:
 
     def get_neighbours(self):
         """
-        Retorna a lista de vizinhos. Se a lista de vizinhos do bootstrapper ainda não foi iniciada , iniciamos
+        Retorna a lista de vizinhos.
         :return:
         """
+        return self.neighbours
+
+    def init_bootstrapper_neighbours(self):
         if len(self.neighbours) == 0 and self.bootstrapper:
             noderepr = self.network_config[self.addr]
             neighbors = noderepr['neighbors']
-            self.neighbours.extend(neighbors)
-        return self.neighbours
+            self.add_neighbours(neighbors)
 
     def get_neighbours_nodesids(self):
         """
@@ -358,8 +366,6 @@ class Ott:
         for neig in self.get_neighbours():
             res.append(tmp[neig])
         return res
-
-
 
     def add_toDispatch(self, id, message):
         """
@@ -379,7 +385,7 @@ class Ott:
         self.toDispatch[id] = dispatcher
         return True
 
-    def set_node_offline(self,node_id):
+    def set_node_offline(self, node_id):
         """
         Set o nodo offline
         :param node_id:
@@ -389,7 +395,6 @@ class Ott:
         if node is None:
             return
         node.setOffline()
-
 
     def add_toDispatchByAddr(self, addr, message):
         """
@@ -443,7 +448,7 @@ class Ott:
         path_id = self.convertPathToId(path)
         logging.debug(f'path_id: {path_id}')
         if None not in path_id:
-            ids = list(map(lambda a: addr_dic.get(a,None), addrs))
+            ids = list(map(lambda a: addr_dic.get(a, None), addrs))
             if None not in ids:
                 tracker = Tracker(path_id, destination=ids)
                 datapacket = DataMessage(id, tracker, packet)
@@ -451,18 +456,17 @@ class Ott:
         else:
             logging.debug('Client not found')
 
-    def send_ping(self,addrs ,path):
+    def send_ping(self, addrs, path):
         addr_dic = self.get_addr_to_id()
         path_id = self.convertPathToId(path)
         logging.debug(f'path_id: {path_id}')
         if None not in path_id:
-            ids = list(map(lambda a: addr_dic.get(a,None), addrs))
+            ids = list(map(lambda a: addr_dic.get(a, None), addrs))
             if None not in ids:
                 tracker = Tracker(path_id, destination=ids)
                 ping = pingMessage(self.get_ott_id(), tracker)
 
                 self.add_toDispatch(tracker.get_next_channel(self.get_ott_id()), ping)
-
 
     def convertPathToId(self, l):
         """
@@ -473,13 +477,11 @@ class Ott:
         tmp = []
         addr_dic = self.get_addr_to_id()
         for p in l:
-            if isinstance(p,list):
+            if isinstance(p, list):
                 tmp.append(self.convertPathToId(p))
             else:
-                tmp.append(addr_dic.get(p,None))
+                tmp.append(addr_dic.get(p, p))
         return tmp
-
-
 
     def broadcast_message(self, addr):
         """
@@ -496,7 +498,6 @@ class Ott:
                 datapacket = pingMessage(id, tracker)
                 info['message'] = datapacket
                 nodeprotocol.sendToAllNodes(info)
-
 
     def setDataCallback(self, callback):
         """
@@ -519,7 +520,7 @@ class Ott:
 
 
 def initOtt():
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(funcName)s - %(message)s')
     asd = {}
     if len(sys.argv) > 1:
